@@ -185,23 +185,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       
       // 启动智能体
       await get().startAgent();
-      
-      // 更新状态
-      set({
-        callState: CallState.CONNECTED,
-        audioStatus: rtcEngineService.getAudioStatus(),
-        messages: [
-          {
-            role: 'system',
-            content: selectedPersona.systemPrompt || `你是${selectedPersona.name}，请用友好的语气交流`
-          },
-          {
-            role: 'assistant',
-            content: `你好，我是${selectedPersona.name}，很高兴与你交谈。`
-          }
-        ],
-      });
-      
+
       logger.info('Connected to voice call');
     } catch (error) {
       logger.error('Failed to connect call', error);

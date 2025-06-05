@@ -197,17 +197,17 @@ export const useMicrophone = () => {
   // 停止音量监测（不影响录制状态）
   const stopVolumeMonitoringOnly = useCallback(() => {
     try {
-      // // 停止音量监测
-      // if (volumeTimerRef.current) {
-      //   cancelAnimationFrame(volumeTimerRef.current);
-      //   volumeTimerRef.current = null;
-      // }
+      // 停止音量监测
+      if (volumeTimerRef.current) {
+        cancelAnimationFrame(volumeTimerRef.current);
+        volumeTimerRef.current = null;
+      }
       
-      // // 只有在不录制的情况下才关闭流
-      // if (!state.isActive && mediaStreamRef.current) {
-      //   mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      //   mediaStreamRef.current = null;
-      // }
+      // 只有在不录制的情况下才关闭流
+      if (!state.isActive && mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+      }
 
       setState(prev => ({ 
         ...prev, 

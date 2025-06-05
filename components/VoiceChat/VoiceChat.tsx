@@ -268,16 +268,15 @@ export function VoiceChat() {
         )}
 
         {/* 对话消息显示区域 */}
-        {(messages.length > 0 || realtimeSubtitles.size > 0) && (
+
           <div className="w-full max-w-2xl bg-white/80 backdrop-blur-sm rounded-xl p-4 max-h-64 overflow-y-auto">
             <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
-              <span>对话记录</span>
-              {isConnected && (
+
                 <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
                   实时语音识别
                 </span>
-              )}
             </h4>
+            
             <div className="space-y-3">
               {/* 显示完整的聊天记录 */}
               {messages.map((message, index) => (
@@ -328,7 +327,7 @@ export function VoiceChat() {
               })}
             </div>
           </div>
-        )}
+
 
                 {/* 主要通话控制 */}
                 <div className="p-2">
