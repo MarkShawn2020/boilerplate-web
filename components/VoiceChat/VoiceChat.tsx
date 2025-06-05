@@ -155,15 +155,8 @@ export function VoiceChat() {
   })
 
   return (
-    <div className=" bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col w-full xs:max-w-md">
-      {/* 顶部状态栏 */}
-      <div className="flex-shrink-0 p-4">
-        <CallStatus 
-          state={callState}
-          duration={formatDuration(duration)}
-          isMuted={isMuted}
-        />
-      </div>
+    <div className="h-full bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col w-full xs:max-w-md">
+
 
       {/* 人设选择器 */}
       {callState === CallState.IDLE && (
@@ -198,23 +191,6 @@ export function VoiceChat() {
           </div>
         )}
 
-        {/* 音量可视化器 */}
-        <div className="space-y-4">
-          <VolumeVisualizer
-            volume={volumeLevel.current}
-            isActive={micIsRecording}
-            size="lg"
-            className="mx-auto"
-          />
-          
-          {/* 波形动画 (语音交互时) */}
-          {(callState === CallState.SPEAKING || callState === CallState.LISTENING) && (
-            <WaveAnimation 
-              isActive={isSpeaking}
-            />
-          )}
-        </div>
-
         {/* 对话消息显示区域 */}
         {messages.length > 0 && (
           <div className="w-full max-w-2xl bg-white/80 backdrop-blur-sm rounded-xl p-4 max-h-64 overflow-y-auto">
@@ -242,6 +218,17 @@ export function VoiceChat() {
 
       {/* 底部控制面板 */}
       <div className="flex-shrink-0 p-4 space-y-4">
+
+                {/* 主要通话控制 */}
+                <CallControls
+          callState={callState}
+          isMuted={isMuted}
+          onStartCall={handleCallStart}
+          onEndCall={handleCallEnd}
+          onToggleMute={handleToggleMute}
+        />
+
+
         {/* 麦克风设置按钮 */}
         <div className="flex justify-center">
           <button
@@ -270,14 +257,7 @@ export function VoiceChat() {
           />
         )}
 
-        {/* 主要通话控制 */}
-        <CallControls
-          callState={callState}
-          isMuted={isMuted}
-          onStartCall={handleCallStart}
-          onEndCall={handleCallEnd}
-          onToggleMute={handleToggleMute}
-        />
+
       </div>
     </div>
   )

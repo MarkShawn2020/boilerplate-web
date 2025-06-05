@@ -11,7 +11,8 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { toast } from "sonner";
 
 import { useMicrophone } from '../../hooks/useMicrophone';
 import { cn } from '../../lib/utils';
@@ -23,14 +24,11 @@ interface MicrophoneControlProps {
   onError?: (error: Error) => void;
 }
 
-export const MicrophoneControl: React.FC<MicrophoneControlProps> = ({
-  className,
-  onRecordingStart,
-  onRecordingStop,
-  onError,
-}) => {
+export function MicrophoneControl({ className, onRecordingStart, onRecordingStop, onError }: MicrophoneControlProps) {
   const [isDeviceMenuOpen, setIsDeviceMenuOpen] = useState(false);
+  const [isSwitching, setIsSwitching] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const {
     isSupported,
@@ -70,8 +68,27 @@ export const MicrophoneControl: React.FC<MicrophoneControlProps> = ({
 
   // 处理设备切换
   const handleDeviceSwitch = async (deviceId: string) => {
-    await switchDevice(deviceId);
-    setIsDeviceMenuOpen(false);
+    if (isSwitching) return; // 防止重复点击
+    
+    setIsSwitching(true);
+    try {
+      const targetDevice = devices.find(d => d.deviceId === deviceId);
+      console.log('Attempting to switch device:', { deviceId, targetDevice });
+      
+      await switchDevice(deviceId);
+      setIsDeviceMenuOpen(false);
+      
+      // 成功反馈
+      toast.success(`已切换到: ${targetDevice?.label || 'Unknown Device'}`);
+      console.log(`Successfully switched to device: ${targetDevice?.label}`);
+      
+    } catch (error) {
+      console.error('Failed to switch device:', error);
+      toast.error(`设备切换失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      onError?.(error as Error);
+    } finally {
+      setIsSwitching(false);
+    }
   };
 
   // 处理权限请求
@@ -79,6 +96,20 @@ export const MicrophoneControl: React.FC<MicrophoneControlProps> = ({
     await checkPermission();
     await getDevices();
   };
+
+  // 点击外部关闭菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsDeviceMenuOpen(false);
+      }
+    };
+
+    if (isDeviceMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isDeviceMenuOpen]);
 
   // 音量指示器
   const VolumeIndicator: React.FC = () => (
@@ -109,16 +140,24 @@ export const MicrophoneControl: React.FC<MicrophoneControlProps> = ({
 
   // 设备选择菜单
   const DeviceMenu: React.FC = () => (
-    <div className="relative">
+    <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsDeviceMenuOpen(!isDeviceMenuOpen)}
-        className="flex items-center space-x-2 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+        className={cn(
+          "flex items-center space-x-2 px-3 py-2 text-sm rounded-lg transition-colors",
+          hasDevices 
+            ? "bg-gray-100 hover:bg-gray-200" 
+            : "bg-gray-50 text-gray-400 cursor-not-allowed"
+        )}
         disabled={!hasDevices}
       >
         <span className="truncate max-w-40">
           {selectedDevice?.label || 'Default Device'}
         </span>
-        <ChevronDown className="h-4 w-4" />
+        <ChevronDown className={cn(
+          "h-4 w-4 transition-transform",
+          isDeviceMenuOpen ? "rotate-180" : ""
+        )} />
       </button>
       
       {isDeviceMenuOpen && hasDevices && (
@@ -129,17 +168,25 @@ export const MicrophoneControl: React.FC<MicrophoneControlProps> = ({
               <button
                 key={device.deviceId}
                 onClick={() => handleDeviceSwitch(device.deviceId)}
+                disabled={isSwitching}
                 className={cn(
                   "w-full text-left px-3 py-2 text-sm rounded-md transition-colors flex items-center justify-between",
-                  selectedDevice?.deviceId === device.deviceId
+                  isSwitching 
+                    ? "opacity-50 cursor-not-allowed"
+                    : selectedDevice?.deviceId === device.deviceId
                     ? "bg-blue-50 text-blue-700"
                     : "hover:bg-gray-50"
                 )}
               >
                 <span className="truncate">{device.label}</span>
-                {selectedDevice?.deviceId === device.deviceId && (
-                  <CheckCircle className="h-4 w-4" />
-                )}
+                <div className="flex items-center space-x-1">
+                  {isSwitching && device.deviceId !== selectedDevice?.deviceId && (
+                    <div className="w-3 h-3 border border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                  )}
+                  {selectedDevice?.deviceId === device.deviceId && !isSwitching && (
+                    <CheckCircle className="h-4 w-4" />
+                  )}
+                </div>
               </button>
             ))}
           </div>

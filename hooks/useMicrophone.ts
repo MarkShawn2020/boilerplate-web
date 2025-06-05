@@ -286,33 +286,57 @@ export const useMicrophone = () => {
 
   // 切换设备
   const switchDevice = useCallback(async (deviceId: string) => {
-    const targetDevice = state.devices.find(device => device.deviceId === deviceId);
-    if (!targetDevice) {
-      logger.warn('Target device not found', { deviceId });
-      return;
-    }
-
+    logger.info('Switch device requested', { deviceId });
+    
     try {
-      // 如果当前在录音，先停止
-      const wasActive = state.isActive;
-      if (wasActive) {
+      // 先更新选中的设备
+      let targetDevice: AudioDevice | undefined;
+      
+      setState(prev => {
+        targetDevice = prev.devices.find(device => device.deviceId === deviceId);
+        if (!targetDevice) {
+          logger.warn('Target device not found', { deviceId, availableDevices: prev.devices });
+          return prev;
+        }
+
+        logger.info('Updating selected device', { 
+          from: prev.selectedDevice?.label, 
+          to: targetDevice.label 
+        });
+        
+        return { ...prev, selectedDevice: targetDevice, error: null };
+      });
+
+      if (!targetDevice) {
+        throw new Error(`Device with id ${deviceId} not found`);
+      }
+
+      // 如果当前在录音，需要重新启动录音以使用新设备
+      const currentState = state;
+      if (currentState.isActive) {
+        logger.info('Restarting recording with new device', { deviceId });
+        
+        // 先停止当前录音
         stopRecording();
-      }
-
-      // 更新选中的设备
-      setState(prev => ({ ...prev, selectedDevice: targetDevice }));
-
-      // 如果之前在录音，用新设备重新开始
-      if (wasActive) {
+        
+        // 等待一小段时间确保清理完成
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // 使用新设备开始录音
         await startRecording(deviceId);
+        
+        logger.info('Successfully restarted recording with new device');
       }
 
-      logger.info('Device switched', { deviceId, label: targetDevice.label });
     } catch (error) {
       logger.error('Failed to switch device', error);
-      setState(prev => ({ ...prev, error: error as Error }));
+      setState(prev => ({ 
+        ...prev, 
+        error: new Error(`Failed to switch device: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }));
+      throw error; // 重新抛出错误以便上层处理
     }
-  }, [state.devices, state.isActive, stopRecording, startRecording]);
+  }, [stopRecording, startRecording, state]);
 
   // 初始化
   useEffect(() => {
