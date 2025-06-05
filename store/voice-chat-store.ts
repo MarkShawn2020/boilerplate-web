@@ -398,6 +398,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
         appId: rtcAppId,
         roomId: rtcRoomId,
         personaId: selectedPersona.id,
+        userId: process.env.NEXT_PUBLIC_RTC_USER_ID || 'User123',
       });
 
       if (!result.success) {
@@ -430,7 +431,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       logger.info('停止智能体...', { taskId });
       
       // 调用 Server Action 停止智能体
-      const result = await stopVoiceChatAction(taskId);
+      const result = await stopVoiceChatAction({ TaskId: taskId });
 
       if (!result.success) {
         throw new Error(result.error || '停止智能体失败');
