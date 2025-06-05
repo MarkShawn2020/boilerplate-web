@@ -242,17 +242,18 @@ export const useVoiceChat = (): {
   }, []);
 
   // 房间二进制消息接收（字幕消息）
-  const handleRoomBinaryMessageReceived = useCallback((event: any) => {
-    logger.info('收到房间二进制消息:', event);
+  const handleRoomBinaryMessageReceived = useCallback((event: { userId: string; message: ArrayBuffer }) => {
+    console.log('📡 [DEBUG] 收到二进制消息:', event.userId, event.message.byteLength, 'bytes');
+    logger.info('收到房间二进制消息:', { userId: event.userId, size: event.message.byteLength });
     
     try {
       // 解析二进制消息为字幕数据
-      if (event.message && event.message instanceof Uint8Array) {
+      if (event.message && event.message instanceof ArrayBuffer) {
         // 调用状态管理中的字幕处理方法
-        processSubtitleMessage(event.message);
+        processSubtitleMessage(new Uint8Array(event.message));
         logger.info('成功处理字幕消息');
       } else {
-        logger.warn('二进制消息格式不正确');
+        logger.warn('二进制消息格式不正确, 期望 ArrayBuffer');
       }
     } catch (error) {
       logger.error('处理房间二进制消息失败:', error);

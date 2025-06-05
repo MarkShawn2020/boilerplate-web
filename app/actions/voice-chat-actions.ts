@@ -65,7 +65,7 @@ export async function startVoiceChatAction(request: StartVoiceChatRequest): Prom
           },
         },
         SubtitleConfig: {
-          Enable: true,
+          DisableRTSSubtitle: false,
           SubtitleMode: 0,
         },
       },
@@ -145,25 +145,6 @@ async function callVolcanoApi(action: string, version: string, body: any): Promi
   };
 
   logger.info('API 请求:', { url: url.toString(), headers, body });
-
-  // 临时模拟响应，避免真实 API 调用
-  // 实际项目中需要实现完整的火山引擎签名算法
-  if (process.env.NODE_ENV === 'development') {
-    logger.warn('开发环境：使用模拟响应');
-    return {
-      ResponseMetadata: {
-        RequestId: `req_${Date.now()}`,
-        Action: action,
-        Version: version,
-        Service: 'rtc',
-        Region: 'cn-north-1',
-      },
-      Result: {
-        TaskId: body.TaskId,
-        Status: 'running',
-      },
-    };
-  }
 
   // 实际的 API 调用
   const response = await fetch(url.toString(), {
