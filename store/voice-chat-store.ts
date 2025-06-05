@@ -5,6 +5,7 @@ import { rtcEngineService, AudioStatus } from '../services/rtc-engine';
 import { aiService, AIMessage } from '../services/ai-service';
 import { logger } from '../services/logger';
 import { defaultPersonas } from 'data/personas';
+import { env } from '../env.mjs';
 
 // 人设接口
 export interface Persona {
@@ -65,10 +66,10 @@ export interface VoiceChatState {
 // 创建 zustand store
 export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   // 初始状态
-  rtcAppId: process.env.NEXT_PUBLIC_RTC_APP_ID || '',
-  rtcToken: process.env.NEXT_PUBLIC_RTC_TOKEN || '',
-  rtcRoomId: 'Room123',
-  userId: `User123`,
+  rtcAppId: env.NEXT_PUBLIC_RTC_APP_ID || '',
+  rtcToken: env.NEXT_PUBLIC_RTC_TOKEN || '',
+  rtcRoomId: env.NEXT_PUBLIC_RTC_ROOM_ID || 'Room123',
+  userId: env.NEXT_PUBLIC_RTC_USER_ID || 'User123',
   
   personas: defaultPersonas,
   selectedPersona: null,
@@ -91,6 +92,14 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   initializeServices: async () => {
     try {
       const { rtcAppId } = get();
+      
+      // 调试环境变量
+      logger.info('Environment variables:', {
+        rtcAppId: env.NEXT_PUBLIC_RTC_APP_ID,
+        rtcToken: env.NEXT_PUBLIC_RTC_TOKEN ? 'SET' : 'NOT_SET',
+        rtcRoomId: env.NEXT_PUBLIC_RTC_ROOM_ID,
+        userId: env.NEXT_PUBLIC_RTC_USER_ID,
+      });
       
       if (!rtcAppId) {
         throw new Error('RTC App ID not configured');

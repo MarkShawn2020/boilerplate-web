@@ -93,11 +93,18 @@ export function VoiceChat() {
   // 组件挂载时初始化服务 - 只在挂载时执行一次
   useEffect(() => {
     logger.info("开始初始化语音服务")
-    // initializeServices().catch(err => {
-    //   logger.error("初始化服务失败", err)
-    //   toast.error("初始化语音服务失败")
-    //   setErrorMessage("初始化服务失败")
-    // })
+    const initServices = async () => {
+      try {
+        const { initializeServices } = useVoiceChatStore.getState();
+        await initializeServices();
+        logger.info("语音服务初始化成功");
+      } catch (err) {
+        logger.error("初始化服务失败", err)
+        toast.error("初始化语音服务失败")
+      }
+    };
+    
+    initServices();
     
     return () => {
       logger.info("组件卸载，清理语音服务资源")
