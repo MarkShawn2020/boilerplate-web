@@ -217,8 +217,6 @@ export function VoiceChat() {
         <div className="flex-shrink-0 p-4">
           <MicrophoneControl
             className="mx-auto max-w-2xl"
-            onRecordingStart={startRecording}
-            onRecordingStop={stopRecording}
             onError={(error) => {
               logger.error('Microphone error', error);
               toast.error(`Microphone error: ${error.message}`);

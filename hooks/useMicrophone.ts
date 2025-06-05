@@ -197,14 +197,17 @@ export const useMicrophone = () => {
   // 停止音量监测（不影响录制状态）
   const stopVolumeMonitoringOnly = useCallback(() => {
     try {
-      // 停止音量监测
-      stopVolumeMonitoring();
+      // // 停止音量监测
+      // if (volumeTimerRef.current) {
+      //   cancelAnimationFrame(volumeTimerRef.current);
+      //   volumeTimerRef.current = null;
+      // }
       
-      // 只有在不录制的情况下才关闭流
-      if (!state.isActive && mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(track => track.stop());
-        mediaStreamRef.current = null;
-      }
+      // // 只有在不录制的情况下才关闭流
+      // if (!state.isActive && mediaStreamRef.current) {
+      //   mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      //   mediaStreamRef.current = null;
+      // }
 
       setState(prev => ({ 
         ...prev, 
@@ -220,7 +223,7 @@ export const useMicrophone = () => {
         error: error as Error 
       }));
     }
-  }, [stopVolumeMonitoring, state.isActive]);
+  }, [state.isActive]);
 
   // 开始音量监测（不录制，只监测）
   const startVolumeMonitoringOnly = useCallback(async (deviceId?: string): Promise<MediaStream | null> => {
@@ -243,7 +246,13 @@ export const useMicrophone = () => {
       initializeAudioAnalyzer(stream);
       
       // 开始音量监测
-      startVolumeMonitoring();
+      if (!volumeTimerRef.current) {
+        const monitor = () => {
+          analyzeVolume();
+          volumeTimerRef.current = requestAnimationFrame(monitor);
+        };
+        monitor();
+      }
 
       setState(prev => ({ 
         ...prev, 
@@ -263,7 +272,7 @@ export const useMicrophone = () => {
       }));
       return null;
     }
-  }, [state.isPermissionGranted, checkPermission, initializeAudioAnalyzer, startVolumeMonitoring]);
+  }, [state.isPermissionGranted, checkPermission, initializeAudioAnalyzer, analyzeVolume]);
 
   // 开始录音
   const startRecording = useCallback(async (deviceId?: string): Promise<MediaStream | null> => {

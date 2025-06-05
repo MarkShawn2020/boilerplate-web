@@ -11,7 +11,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from "sonner";
 
 import { useMicrophone } from '../../hooks/useMicrophone';
@@ -19,15 +19,14 @@ import { cn } from '../../lib/utils';
 
 interface MicrophoneControlProps {
   className?: string;
-  onRecordingStart?: (stream: MediaStream) => void;
-  onRecordingStop?: () => void;
   onError?: (error: Error) => void;
 }
 
-export function MicrophoneControl({ className, onRecordingStart, onRecordingStop, onError }: MicrophoneControlProps) {
+export function MicrophoneControl({ className, onError }: MicrophoneControlProps) {
   const [isDeviceMenuOpen, setIsDeviceMenuOpen] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [hasAutoStarted, setHasAutoStarted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -84,26 +83,27 @@ export function MicrophoneControl({ className, onRecordingStart, onRecordingStop
   };
 
   // 启动音频监测（仅监测，不录音）
-  const startMonitoring = async () => {
+  const startMonitoring = useCallback(async () => {
     try {
       if (!isPermissionGranted) {
         await checkPermission();
       }
       const stream = await startVolumeMonitoringOnly();
       if (stream) {
-        onRecordingStart?.(stream);
+        // 只是通知流已获取，不触发语音对话录制
+        console.log('音量监测已启动，音频流获取成功');
       }
     } catch (error) {
       console.error('Failed to start monitoring:', error);
       onError?.(error as Error);
     }
-  };
+  }, [isPermissionGranted, checkPermission, startVolumeMonitoringOnly, onError]);
 
   // 停止音频监测
-  const stopMonitoring = () => {
+  const stopMonitoring = useCallback(() => {
     stopVolumeMonitoringOnly();
-    onRecordingStop?.();
-  };
+    console.log('音量监测已停止');
+  }, [stopVolumeMonitoringOnly]);
 
   // 点击外部关闭菜单
   useEffect(() => {
@@ -119,21 +119,27 @@ export function MicrophoneControl({ className, onRecordingStart, onRecordingStop
     }
   }, [isDeviceMenuOpen]);
 
-  // 组件挂载时自动启动音频监测
+  // 组件挂载时自动启动音频监测（简化版）
   useEffect(() => {
-    if (isSupported && isPermissionGranted && !isMonitoring && !isActive) {
-      startMonitoring();
-    }
-  }, [isSupported, isPermissionGranted, isMonitoring, isActive]);
+    // 延迟检查，避免初始化冲突
+    const timer = setTimeout(() => {
+      if (!hasAutoStarted && isSupported && isPermissionGranted && !isMonitoring && !isActive) {
+        setHasAutoStarted(true);
+        startMonitoring();
+      }
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, []); // 空依赖，只在组件挂载时执行一次
 
   // 组件卸载时停止监测
   useEffect(() => {
     return () => {
       if (isMonitoring) {
-        stopMonitoring();
+        stopVolumeMonitoringOnly();
       }
     };
-  }, [isMonitoring]);
+  }, []); // 移除依赖，只在组件卸载时执行
 
   // 音量指示器
   const VolumeIndicator: React.FC = () => (
@@ -230,23 +236,6 @@ export function MicrophoneControl({ className, onRecordingStart, onRecordingStop
       </div>
     );
   };
-
-  // 状态指示器
-  const StatusIndicator: React.FC = () => (
-    <div className="flex items-center space-x-2">
-      <div className={cn(
-        "w-2 h-2 rounded-full",
-        isRecording ? "bg-green-500 animate-pulse" :
-        isActive ? "bg-yellow-500" :
-        "bg-gray-400"
-      )} />
-      <span className="text-xs text-gray-500">
-        {isRecording ? 'Recording' :
-         isActive ? 'Active' :
-         'Inactive'}
-      </span>
-    </div>
-  );
 
   if (!isSupported) {
     return (
