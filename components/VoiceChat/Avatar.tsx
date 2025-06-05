@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import { Persona } from "./VoiceChat"
+import { Persona } from "../../store/voice-chat-store"
 
 interface AvatarProps {
   persona: Persona

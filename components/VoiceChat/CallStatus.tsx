@@ -1,4 +1,4 @@
-import { CallState } from "./VoiceChat"
+import { CallState } from "../../store/voice-chat-store"
 
 interface CallStatusProps {
   state: CallState

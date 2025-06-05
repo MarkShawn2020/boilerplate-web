@@ -1,5 +1,5 @@
 import { Avatar } from "./Avatar"
-import { Persona } from "./VoiceChat"
+import { Persona } from "../../store/voice-chat-store"
 
 interface PersonaSelectorProps {
   personas: Persona[]

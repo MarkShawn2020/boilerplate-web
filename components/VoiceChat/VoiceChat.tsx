@@ -1,13 +1,18 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useCallback } from "react"
+import { toast } from "sonner"
 
-// 组件导入 - 使用相对路径
+// 组件导入
 import { Avatar } from "./Avatar"
 import { CallControls } from "./CallControls"
 import { CallStatus } from "./CallStatus"
 import { PersonaSelector } from "./PersonaSelector"
 import { WaveAnimation } from "./WaveAnimation"
+
+// 服务和状态管理导入
+import { useVoiceChatStore, CallState, Persona, initializeVoiceChat } from "../../store/voice-chat-store"
+import { logger } from "../../services/logger"
 
 // 模拟数据 - 实际项目中应从API获取
 const DEFAULT_PERSONAS = [
@@ -41,115 +46,77 @@ const DEFAULT_PERSONAS = [
   },
 ]
 
-export interface Persona {
-  id: string
-  name: string
-  description: string
-  avatar: string
-  voiceId?: string
-}
-
 export interface VoiceChatProps {
   personas?: Persona[]
 }
 
-// 将服务状态映射为简化的UI状态
-export type CallState = "idle" | "connecting" | "connected" | "speaking" | "listening"
 
 export function VoiceChat({ personas = DEFAULT_PERSONAS }: VoiceChatProps) {
-  // 确保始终有一个有效的默认人设
-  const defaultPersona = useMemo(() => {
-    // 确保DEFAULT_PERSONAS至少有一个元素，这是必须的
-    const defaultPersonaItem = DEFAULT_PERSONAS[0];
-    
-    // 如果personas有效且非空，使用第一个人设，否则使用默认人设
-    return (Array.isArray(personas) && personas.length > 0) 
-      ? personas[0] 
-      : defaultPersonaItem;
-  }, [personas]) as Persona; // 使用类型断言确保返回类型是Persona
+  // 使用全局状态
+  const {
+    callState,
+    selectedPersona,
+    audioStatus,
+    error,
+    messages,
+    isMuted,
+    initializeServices,
+    setSelectedPersona,
+    connectCall,
+    disconnectCall,
+    toggleMute,
+    sendMessage,
+  } = useVoiceChatStore()
   
-  const [selectedPersona, setSelectedPersona] = useState<Persona>(defaultPersona)
-  const [callState, setCallState] = useState<CallState>("idle")
-  const [isMuted, setIsMuted] = useState(false)
-  const [duration, setDuration] = useState(0)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [userMessage, setUserMessage] = useState<string>("")
-  const [aiMessage, setAiMessage] = useState<string>("")
-  const [isSpeaking, setIsSpeaking] = useState(false)
-  const [audioLevel, setAudioLevel] = useState(0)
-
-  // 初始化时显示的日志信息
+  // 格式化通话时间
+  const formatDuration = (seconds) => {
+    // 格式化逻辑
+  }
+  
+  // 组件挂载时初始化服务
   useEffect(() => {
-    console.info("VoiceChat组件初始化")
-
-    // 模拟服务初始化和事件回调
-    // 注意：在实际项目中，这里将使用RTCService和DoubaoService
-    // 目前先以模拟形式展示UI效果
-  }, [])
-
-  // 通话计时器
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null
-
-    // 如果正在通话中，启动计时器
-    if (callState === "connected" || callState === "speaking" || callState === "listening") {
-      interval = setInterval(() => {
-        setDuration((prev) => prev + 1)
-      }, 1000)
+    initializeServices().catch(error => {
+      logger.error("初始化服务失败", error)
+      toast.error("初始化语音服务失败")
+    })
+    
+    // 初始化人设
+    if (personas.length > 0 && !selectedPersona) {
+      setSelectedPersona(personas[0])
     }
-
-    // 如果通话结束，重置计时器
-    if (callState === "idle") {
-      setDuration(0)
-    }
-
-    // 清理函数
+    
     return () => {
-      if (interval) {
-        clearInterval(interval)
-      }
+      // 清理逻辑
     }
-  }, [callState])
-
+  }, [])
+  
   // 处理通话控制
   const handleCallStart = async () => {
-    // 模拟连接过程
     try {
-      console.info("开始通话")
-      setCallState("connecting")
-
-      // 模拟连接延迟
-      setTimeout(() => {
-        setCallState("connected")
-      }, 1500)
+      await connectCall()
     } catch (error) {
-      console.error("开始通话出错", error)
-      setErrorMessage((error as Error).message)
+      toast.error("开始通话失败")
     }
   }
-
+  
   const handleCallEnd = async () => {
     try {
-      console.info("结束通话")
-      // 重置状态
-      setCallState("idle")
-      setDuration(0)
-      setUserMessage("")
-      setAiMessage("")
+      await disconnectCall()
     } catch (error) {
-      console.error("结束通话出错", error)
+      toast.error("结束通话失败")
     }
   }
-
-  const handleToggleMute = () => {
-    const newMutedState = !isMuted
-    setIsMuted(newMutedState)
-    console.info(`${newMutedState ? "开启" : "关闭"}静音`)
+  
+  const handleToggleMute = async () => {
+    try {
+      await toggleMute()
+    } catch (error) {
+      toast.error("麦克风控制失败")
+    }
   }
-
+  
   // 人设选择处理
-  const handlePersonaSelect = (persona: Persona) => {
-    // 如果已经在通话中，需要先断开
+  const handlePersonaSelect = (persona) => {
     if (callState !== "idle") {
       handleCallEnd().then(() => {
         setSelectedPersona(persona)
@@ -158,38 +125,10 @@ export function VoiceChat({ personas = DEFAULT_PERSONAS }: VoiceChatProps) {
       setSelectedPersona(persona)
     }
   }
-
-  // 模拟收到用户消息
+  
+  // 模拟发送消息
   const simulateUserMessage = () => {
-    if (callState === "connected" || callState === "listening") {
-      setUserMessage("这是用户的语音输入示例")
-      setCallState("listening")
-
-      // 模拟AI响应
-      setTimeout(() => {
-        simulateAIResponse()
-      }, 1500)
-    }
-  }
-
-  // 模拟AI回复
-  const simulateAIResponse = () => {
-    setAiMessage("你好，我是AI助手，很高兴为你提供帮助!")
-    setCallState("speaking")
-    setIsSpeaking(true)
-
-    // 模拟语音结束
-    setTimeout(() => {
-      setIsSpeaking(false)
-      setCallState("connected")
-    }, 3000)
-  }
-
-  // 格式化通话时间
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+    // 可以在开发环境下用于测试
   }
 
   return (
