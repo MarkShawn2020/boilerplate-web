@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { rtcEngineService, AudioStatus } from '../services/rtc-engine';
 import { aiService, AIMessage } from '../services/ai-service';
 import { logger } from '../services/logger';
+import { defaultPersonas } from 'data/personas';
 
 // 人设接口
 export interface Persona {
@@ -69,7 +70,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   rtcRoomId: 'default-room',
   userId: `user-${Date.now()}`,
   
-  personas: [],
+  personas: defaultPersonas,
   selectedPersona: null,
   
   callState: CallState.IDLE,
