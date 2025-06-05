@@ -67,6 +67,10 @@ export class RTCEngineService {
       this.config = config;
       this.audioStatus.isProcessing = true;
 
+      logger.info('准备加入房间', {
+        config
+      });
+
       await this.engine.joinRoom(
         config.token,
         config.roomId,

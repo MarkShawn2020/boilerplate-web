@@ -67,8 +67,8 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   // 初始状态
   rtcAppId: process.env.NEXT_PUBLIC_RTC_APP_ID || '',
   rtcToken: process.env.NEXT_PUBLIC_RTC_TOKEN || '',
-  rtcRoomId: 'default-room',
-  userId: `user-${Date.now()}`,
+  rtcRoomId: 'Room123',
+  userId: `User123`,
   
   personas: defaultPersonas,
   selectedPersona: null,

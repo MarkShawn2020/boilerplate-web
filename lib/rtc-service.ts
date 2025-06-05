@@ -153,28 +153,37 @@ export class RTCService {
 
   /**
    * 加入语音房间
+   * @param tokenOverride 可选的token参数，覆盖初始化时提供的token
    */
-  public async joinRoom(): Promise<boolean> {
+  public async joinRoom(tokenOverride?: string): Promise<boolean> {
     if (!this.engine || !this.config) {
       this.handleError(new Error('RTC引擎未初始化'))
       return false
     }
 
     try {
+      // 使用传入的token或配置中的token
+      const token = tokenOverride || this.config.token || null
+      
       logger.info('准备加入房间', { 
         module: 'RTCService',
         data: { 
           roomId: this.config.roomId,
-          uid: this.config.uid
+          uid: this.config.uid,
+          hasToken: !!token // 记录是否有token，不记录token本身
         }
       })
 
       // 加入RTC房间
       await this.engine.joinRoom(
-        this.config.token,
+        token, // 允许null值，与参考实现保持一致
         this.config.roomId,
         {
-          userId: this.config.uid
+          userId: this.config.uid,
+          extraInfo: JSON.stringify({
+            call_scene: 'OPEN-VOICE-CHAT',
+            user_id: this.config.uid,
+          })
         },
         {
           isAutoPublish: true, // 自动发布
@@ -189,7 +198,8 @@ export class RTCService {
       logger.info('成功加入房间', { module: 'RTCService' })
       return true
     } catch (error) {
-      logger.error('加入房间失败', { 
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.error(`加入房间失败: ${errorMessage}`, { 
         module: 'RTCService',
         error: error as Error
       })
