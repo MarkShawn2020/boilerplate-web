@@ -238,7 +238,7 @@ export function VoiceChat() {
       )}
 
       {/* 主要内容区域 */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8 mt-auto">
         {/* AI 角色头像和信息 */}
         {selectedPersona && (
           <div className="text-center space-y-4 flex flex-col justify-center items-center">
@@ -269,6 +269,7 @@ export function VoiceChat() {
 
         {/* 对话消息显示区域 */}
 
+            {callState !== CallState.IDLE && (
           <div className="w-full max-w-2xl bg-white/80 backdrop-blur-sm rounded-xl p-4 max-h-64 overflow-y-auto">
             <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
 
@@ -315,9 +316,6 @@ export function VoiceChat() {
                       }`}
                     >
                       <p className="text-sm">{subtitle.text}</p>
-                      {!subtitle.isComplete && (
-                        <span className="inline-block w-2 h-4 bg-current ml-1 animate-pulse opacity-50" />
-                      )}
                       <div className="text-xs opacity-70 mt-1">
                         正在识别...
                       </div>
@@ -326,7 +324,8 @@ export function VoiceChat() {
                 );
               })}
             </div>
-          </div>
+            </div>
+          )}
 
 
                 {/* 主要通话控制 */}
@@ -349,16 +348,7 @@ export function VoiceChat() {
         )}
       </div>
 
-
-
-      {/* 提示文字 */}
-      {callState === CallState.IDLE && selectedPersona && (
-        <p className="text-center text-sm text-gray-500">
-          点击通话按钮开始与 {selectedPersona.name} 对话
-        </p>
-      )}
-
-
     </div>
+
   )
 }
