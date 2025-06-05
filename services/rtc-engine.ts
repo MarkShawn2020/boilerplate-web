@@ -341,6 +341,154 @@ export class RTCEngineService {
     this.engine.off(VERTC.events.onConnectionStateChanged);
     this.engine.off(VERTC.events.onError);
   }
+
+  /**
+   * 注册外部事件监听器（用于 useVoiceChat hook）
+   */
+  public registerEventListeners(listeners: Record<string, (...args: any[]) => void>): void {
+    if (!this.engine) {
+      logger.warn('RTC Engine not initialized, cannot register listeners');
+      return;
+    }
+
+    // 注册错误事件
+    if (listeners.handleError) {
+      this.engine.on(VERTC.events.onError, listeners.handleError);
+    }
+
+    // 注册用户加入事件
+    if (listeners.handleUserJoin) {
+      this.engine.on(VERTC.events.onUserJoined, listeners.handleUserJoin);
+    }
+
+    // 注册用户离开事件
+    if (listeners.handleUserLeave) {
+      this.engine.on(VERTC.events.onUserLeave, listeners.handleUserLeave);
+    }
+
+    // 注册用户发布流事件
+    if (listeners.handleUserPublishStream) {
+      this.engine.on(VERTC.events.onUserPublishStream, listeners.handleUserPublishStream);
+    }
+
+    // 注册用户取消发布流事件
+    if (listeners.handleUserUnpublishStream) {
+      this.engine.on(VERTC.events.onUserUnpublishStream, listeners.handleUserUnpublishStream);
+    }
+
+    // 注册本地音频属性报告
+    if (listeners.handleLocalAudioPropertiesReport) {
+      this.engine.on(VERTC.events.onLocalAudioPropertiesReport, listeners.handleLocalAudioPropertiesReport);
+    }
+
+    // 注册远端音频属性报告
+    if (listeners.handleRemoteAudioPropertiesReport) {
+      this.engine.on(VERTC.events.onRemoteAudioPropertiesReport, listeners.handleRemoteAudioPropertiesReport);
+    }
+
+    // 注册音频设备状态变化
+    if (listeners.handleAudioDeviceStateChanged) {
+      this.engine.on(VERTC.events.onAudioDeviceStateChanged, listeners.handleAudioDeviceStateChanged);
+    }
+
+    // 注册自动播放失败事件
+    if (listeners.handleAutoPlayFail) {
+      this.engine.on(VERTC.events.onAutoPlayFail, listeners.handleAutoPlayFail);
+    }
+
+    // 注册播放器事件
+    if (listeners.handlePlayerEvent) {
+      this.engine.on(VERTC.events.onPlayerEvent, listeners.handlePlayerEvent);
+    }
+
+    // 注册用户开始音频采集
+    if (listeners.handleUserStartAudioCapture) {
+      this.engine.on(VERTC.events.onUserStartAudioCapture, listeners.handleUserStartAudioCapture);
+    }
+
+    // 注册用户停止音频采集
+    if (listeners.handleUserStopAudioCapture) {
+      this.engine.on(VERTC.events.onUserStopAudioCapture, listeners.handleUserStopAudioCapture);
+    }
+
+    // 注册网络质量事件
+    if (listeners.handleNetworkQuality) {
+      this.engine.on(VERTC.events.onNetworkQuality, listeners.handleNetworkQuality);
+    }
+
+    // 注册房间二进制消息接收
+    if (listeners.handleRoomBinaryMessageReceived) {
+      this.engine.on(VERTC.events.onRoomBinaryMessageReceived, listeners.handleRoomBinaryMessageReceived);
+    }
+
+    logger.info('External event listeners registered');
+  }
+
+  /**
+   * 取消注册外部事件监听器
+   */
+  public unregisterEventListeners(): void {
+    if (!this.engine) return;
+
+    // 移除所有外部注册的事件监听器
+    this.engine.off(VERTC.events.onError);
+    this.engine.off(VERTC.events.onUserJoined);
+    this.engine.off(VERTC.events.onUserLeave);
+    this.engine.off(VERTC.events.onUserPublishStream);
+    this.engine.off(VERTC.events.onUserUnpublishStream);
+    this.engine.off(VERTC.events.onLocalAudioPropertiesReport);
+    this.engine.off(VERTC.events.onRemoteAudioPropertiesReport);
+    this.engine.off(VERTC.events.onAudioDeviceStateChanged);
+    this.engine.off(VERTC.events.onAutoPlayFail);
+    this.engine.off(VERTC.events.onPlayerEvent);
+    this.engine.off(VERTC.events.onUserStartAudioCapture);
+    this.engine.off(VERTC.events.onUserStopAudioCapture);
+    this.engine.off(VERTC.events.onNetworkQuality);
+    this.engine.off(VERTC.events.onRoomBinaryMessageReceived);
+
+    logger.info('External event listeners unregistered');
+  }
+
+  /**
+   * 获取可用的音频设备
+   */
+  public async getAvailableDevices(): Promise<{
+    audioInputs: Array<{ deviceId: string; label: string }>;
+    audioOutputs: Array<{ deviceId: string; label: string }>;
+  }> {
+    try {
+      if (!this.engine) {
+        throw new Error('RTC Engine not initialized');
+      }
+
+      const devices = await this.engine.getDevices();
+      
+      return {
+        audioInputs: devices.audioInputs || [],
+        audioOutputs: devices.audioOutputs || [],
+      };
+    } catch (error) {
+      logger.error('Failed to get available devices', error);
+      return { audioInputs: [], audioOutputs: [] };
+    }
+  }
+
+  /**
+   * 切换音频设备
+   */
+  public async switchAudioDevice(deviceId: string): Promise<void> {
+    try {
+      if (!this.engine) {
+        throw new Error('RTC Engine not initialized');
+      }
+
+      await this.engine.switchDevice(MediaType.AUDIO, deviceId);
+      logger.info(`Switched to audio device: ${deviceId}`);
+    } catch (error) {
+      logger.error('Failed to switch audio device', error);
+      throw error;
+    }
+  }
 }
 
 // 导出单例实例

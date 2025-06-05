@@ -14,6 +14,7 @@ import { WaveAnimation } from "./WaveAnimation"
 
 // Hook 导入
 import { useMicrophone } from "../../hooks/useMicrophone"
+import { useVoiceChat } from "../../hooks/useVoiceChat"
 
 // 服务和状态管理导入
 import { logger } from "../../services/logger"
@@ -37,7 +38,20 @@ export function VoiceChat() {
     toggleMute,
     setSelectedPersona,
     messages,
+    realtimeSubtitles,
+    taskId,
+    isAgentActive,
   } = useVoiceChatStore()
+
+  // 使用 useVoiceChat hook
+  const {
+    listeners,
+    audioLevel,
+    isConnected,
+    startRecording,
+    stopRecording,
+    switchDevice,
+  } = useVoiceChat();
 
   // 麦克风 Hook
   const {
@@ -51,15 +65,13 @@ export function VoiceChat() {
   // 每秒更新通话时间
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    
-    if (callState === CallState.CONNECTED || 
-        callState === CallState.SPEAKING || 
-        callState === CallState.LISTENING) {
+    if (callState === CallState.CONNECTED || callState === CallState.SPEAKING || callState === CallState.LISTENING) {
       timer = setInterval(() => {
         setDuration(prev => prev + 1);
       }, 1000);
+    } else {
+      setDuration(0);
     }
-    
     return () => {
       if (timer) clearInterval(timer);
     };
@@ -85,7 +97,6 @@ export function VoiceChat() {
   // 单独处理人设初始化
   useEffect(() => {
     if (personas.length > 0 && !selectedPersona && personas[0]) {
-      logger.info("初始化默认人设")
       setSelectedPersona(personas[0])
     }
   }, [personas, selectedPersona, setSelectedPersona])
@@ -116,6 +127,8 @@ export function VoiceChat() {
   const handleCallStart = async () => {
     try {
       await connectCall()
+      await startRecording()
+      logger.info("通话开始成功")
     } catch (error) {
       logger.error("Failed to start call", error)
       toast.error("通话连接失败")
@@ -125,6 +138,7 @@ export function VoiceChat() {
   // 处理结束通话
   const handleCallEnd = async () => {
     try {
+      await stopRecording()
       await disconnectCall()
       setDuration(0)
     } catch (error) {
@@ -159,11 +173,12 @@ export function VoiceChat() {
     error,
     duration,
     messages,
+    audioLevel,
+    isConnected,
   })
 
   return (
     <div className="h-full bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col w-full xs:max-w-md">
-
 
       {/* 人设选择器 */}
       {callState === CallState.IDLE && (
@@ -184,7 +199,7 @@ export function VoiceChat() {
             <Avatar
               persona={selectedPersona}
               size="large"
-              isActive={callState === CallState.SPEAKING}
+              isActive={callState === CallState.SPEAKING || isSpeaking}
             />
             
             <div className="space-y-2">
@@ -198,27 +213,112 @@ export function VoiceChat() {
           </div>
         )}
 
+        {/* 语音波形动画 */}
+        {isConnected && (
+          <div className="space-y-4">
+            <WaveAnimation isActive={isSpeaking || callState === CallState.SPEAKING} />
+            <VolumeVisualizer level={audioLevel} />
+          </div>
+        )}
+
+        {/* 通话状态 */}
+        {isConnected && (
+          <CallStatus
+            state={callState}
+            duration={formatDuration(duration)}
+            isMuted={isMuted}
+          />
+        )}
+
+        {/* 智能体状态显示 */}
+        {isConnected && (
+          <div className="w-full max-w-2xl bg-green-50 border border-green-200 rounded-xl p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className={`w-3 h-3 rounded-full ${isAgentActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+                <span className="text-sm font-medium text-green-800">
+                  智能体状态: {isAgentActive ? '已启动' : '未启动'}
+                </span>
+              </div>
+              {taskId && (
+                <span className="text-xs text-green-600 font-mono bg-green-100 px-2 py-1 rounded">
+                  {taskId.slice(-8)}
+                </span>
+              )}
+            </div>
+            {selectedPersona && (
+              <div className="mt-2 text-xs text-green-600">
+                当前人设: {selectedPersona.name}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 实时字幕显示 */}
+        {isConnected && realtimeSubtitles.size > 0 && (
+          <div className="w-full max-w-2xl bg-blue-50 border border-blue-200 rounded-xl p-4 min-h-16">
+            <h4 className="text-sm font-medium text-blue-800 mb-2">实时字幕</h4>
+            <div className="space-y-2">
+              {Array.from(realtimeSubtitles.values()).map((subtitle) => (
+                <div key={subtitle.userId} className="flex items-start space-x-2">
+                  <span className="text-xs text-blue-600 font-medium">
+                    {subtitle.userId.toLowerCase().startsWith('bot') ? 'AI' : '用户'}:
+                  </span>
+                  <span className="text-sm text-blue-700 flex-1">
+                    {subtitle.text}
+                    {!subtitle.isComplete && (
+                      <span className="inline-block w-2 h-4 bg-blue-400 ml-1 animate-pulse" />
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* 对话消息显示区域 */}
         {messages.length > 0 && (
           <div className="w-full max-w-2xl bg-white/80 backdrop-blur-sm rounded-xl p-4 max-h-64 overflow-y-auto">
+            <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+              <span>对话记录</span>
+              {messages.some(m => m.isFromSubtitle) && (
+                <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                  实时转写
+                </span>
+              )}
+            </h4>
             <div className="space-y-3">
               {messages.map((message, index) => (
                 <div
-                  key={index}
+                  key={message.id || index}
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg relative ${
                       message.role === 'user'
                         ? 'bg-blue-500 text-white'
                         : 'bg-gray-200 text-gray-800'
                     }`}
                   >
                     <p className="text-sm">{message.content}</p>
+                    {message.isFromSubtitle && (
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white" 
+                           title="来自实时字幕" />
+                    )}
+                    <div className="text-xs opacity-70 mt-1">
+                      {new Date(message.timestamp).toLocaleTimeString()}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* 错误提示 */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 max-w-md">
+            <p className="text-sm text-red-600">{error.message}</p>
           </div>
         )}
       </div>
@@ -226,15 +326,14 @@ export function VoiceChat() {
       {/* 底部控制面板 */}
       <div className="flex-shrink-0 p-4 space-y-4">
 
-                {/* 主要通话控制 */}
-                <CallControls
+        {/* 主要通话控制 */}
+        <CallControls
           callState={callState}
           isMuted={isMuted}
           onStartCall={handleCallStart}
           onEndCall={handleCallEnd}
           onToggleMute={handleToggleMute}
         />
-
 
         {/* 麦克风设置按钮 */}
         <div className="flex justify-center">
@@ -250,13 +349,8 @@ export function VoiceChat() {
         {showMicSettings && (
           <MicrophoneControl
             className="mx-auto max-w-2xl"
-            onRecordingStart={() => {
-              logger.info('Microphone recording started');
-              // 这里可以集成到 RTC 服务中
-            }}
-            onRecordingStop={() => {
-              logger.info('Microphone recording stopped');
-            }}
+            onRecordingStart={startRecording}
+            onRecordingStop={stopRecording}
             onError={(error) => {
               logger.error('Microphone error', error);
               toast.error(`Microphone error: ${error.message}`);
@@ -264,7 +358,18 @@ export function VoiceChat() {
           />
         )}
 
+        {/* 提示文字 */}
+        {callState === CallState.IDLE && selectedPersona && (
+          <p className="text-center text-sm text-gray-500">
+            点击通话按钮开始与 {selectedPersona.name} 对话
+          </p>
+        )}
 
+        {isConnected && (
+          <p className="text-center text-sm text-gray-500">
+            保持通话，AI正在{callState === CallState.SPEAKING ? '说话' : '聆听'}
+          </p>
+        )}
       </div>
     </div>
   )
