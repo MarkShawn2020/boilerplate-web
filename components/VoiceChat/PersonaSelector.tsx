@@ -3,7 +3,7 @@ import { Persona } from "../../store/voice-chat-store"
 
 interface PersonaSelectorProps {
   personas: Persona[]
-  selectedPersona: Persona
+  selectedPersona: Persona | null
   onSelect: (persona: Persona) => void
 }
 
@@ -17,7 +17,7 @@ export function PersonaSelector({ personas, selectedPersona, onSelect }: Persona
           className={`
             p-3 rounded-2xl border-2 transition-all duration-200
             hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500
-            ${selectedPersona.id === persona.id
+            ${selectedPersona && selectedPersona.id === persona.id
               ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
               : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
             }
@@ -27,7 +27,7 @@ export function PersonaSelector({ personas, selectedPersona, onSelect }: Persona
             <Avatar persona={persona} size="small" />
             <span className={`
               text-xs font-medium truncate w-full
-              ${selectedPersona.id === persona.id
+              ${selectedPersona && selectedPersona.id === persona.id
                 ? 'text-blue-700 dark:text-blue-300'
                 : 'text-gray-700 dark:text-gray-300'
               }

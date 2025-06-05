@@ -267,7 +267,7 @@ export class RTCEngineService {
       logger.info(`User ${e.userId} published stream with mediaType ${e.mediaType}`);
       
       if (this.eventCallbacks[VERTC.events.onUserPublishStream]) {
-        this.eventCallbacks[VERTC.events.onUserPublishStream].forEach(callback => callback(e));
+        this.eventCallbacks[VERTC.events.onUserPublishStream]?.forEach(callback => callback(e));
       }
     });
     
@@ -276,25 +276,27 @@ export class RTCEngineService {
       logger.info(`User ${e.userId} unpublished stream with mediaType ${e.mediaType}`);
       
       if (this.eventCallbacks[VERTC.events.onUserUnpublishStream]) {
-        this.eventCallbacks[VERTC.events.onUserUnpublishStream].forEach(callback => callback(e));
+        this.eventCallbacks[VERTC.events.onUserUnpublishStream]?.forEach(callback => callback(e));
       }
     });
     
     // 监听用户加入房间
-    this.engine.on(VERTC.events.onUserJoined, (e: {userId: string}) => {
-      logger.info(`User ${e.userId} joined the room`);
+    this.engine.on(VERTC.events.onUserJoined, (event: any) => {
+      const userId = typeof event === 'object' && event.userId ? event.userId : 'unknown';
+      logger.info(`User ${userId} joined the room`);
       
       if (this.eventCallbacks[VERTC.events.onUserJoined]) {
-        this.eventCallbacks[VERTC.events.onUserJoined].forEach(callback => callback(e));
+        this.eventCallbacks[VERTC.events.onUserJoined]?.forEach(callback => callback(event));
       }
     });
     
     // 监听用户离开房间
-    this.engine.on(VERTC.events.onUserLeave, (e: {userId: string}) => {
-      logger.info(`User ${e.userId} left the room`);
+    this.engine.on(VERTC.events.onUserLeave, (event: any) => {
+      const userId = typeof event === 'object' && event.userId ? event.userId : 'unknown';
+      logger.info(`User ${userId} left the room`);
       
       if (this.eventCallbacks[VERTC.events.onUserLeave]) {
-        this.eventCallbacks[VERTC.events.onUserLeave].forEach(callback => callback(e));
+        this.eventCallbacks[VERTC.events.onUserLeave]?.forEach(callback => callback(event));
       }
     });
     
@@ -303,16 +305,21 @@ export class RTCEngineService {
       logger.info(`Connection state changed to ${e.state}`);
       
       if (this.eventCallbacks[VERTC.events.onConnectionStateChanged]) {
-        this.eventCallbacks[VERTC.events.onConnectionStateChanged].forEach(callback => callback(e));
+        this.eventCallbacks[VERTC.events.onConnectionStateChanged]?.forEach(callback => callback(e));
       }
     });
     
     // 监听错误
-    this.engine.on(VERTC.events.onError, (e: {code: number, message: string}) => {
-      logger.error(`RTC Engine error: ${e.code} - ${e.message}`);
+    this.engine.on(VERTC.events.onError, (event: any) => {
+      // 兼容SDK不同版本的错误结构
+      const errorCode = event?.errorCode || event?.code || 'unknown';
+      const message = event?.message || '';
+      const forbiddenTime = event?.forbiddenTime || 0;
+      
+      logger.error(`RTC Engine error: ${errorCode} - ${message} ${forbiddenTime ? `(Forbidden for ${forbiddenTime}s)` : ''}`);
       
       if (this.eventCallbacks[VERTC.events.onError]) {
-        this.eventCallbacks[VERTC.events.onError].forEach(callback => callback(e));
+        this.eventCallbacks[VERTC.events.onError]?.forEach(callback => callback(event));
       }
     });
   }

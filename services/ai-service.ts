@@ -94,8 +94,9 @@ export class AIService {
       
       // 尝试匹配一些关键词
       Object.keys(responses).forEach(key => {
+        if(!lastMessage) return;
         if (lastMessage.content.includes(key)) {
-          reply = responses[key];
+          reply = responses[key]!;
         }
       });
       

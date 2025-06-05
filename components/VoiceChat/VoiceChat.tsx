@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useCallback } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
 // 组件导入
@@ -11,55 +11,26 @@ import { PersonaSelector } from "./PersonaSelector"
 import { WaveAnimation } from "./WaveAnimation"
 
 // 服务和状态管理导入
-import { useVoiceChatStore, CallState, Persona, initializeVoiceChat } from "../../store/voice-chat-store"
 import { logger } from "../../services/logger"
-
-// 模拟数据 - 实际项目中应从API获取
-const DEFAULT_PERSONAS = [
-  {
-    id: "persona1",
-    name: "智能助理",
-    description: "专业、简洁的通用AI助手",
-    avatar: "/avatars/INTELLIGENT_ASSISTANT.png",
-    voiceId: "voice_female_1",
-  },
-  {
-    id: "persona2",
-    name: "知识导师",
-    description: "专注学术问题的博学导师",
-    avatar: "/avatars/TEACHING_ASSISTANT.png",
-    voiceId: "voice_male_1",
-  },
-  {
-    id: "persona3",
-    name: "创意伙伴",
-    description: "帮助激发创意的艺术伙伴",
-    avatar: "/avatars/VIRTUAL_GIRL_FRIEND.png",
-    voiceId: "voice_female_2",
-  },
-  {
-    id: "persona4",
-    name: "心理顾问",
-    description: "温暖体贴的情感顾问",
-    avatar: "/avatars/CHILDREN_ENCYCLOPEDIA.png",
-    voiceId: "voice_male_2",
-  },
-]
-
-export interface VoiceChatProps {
-  personas?: Persona[]
-}
+import { useVoiceChatStore, CallState, Persona } from "../../store/voice-chat-store"
 
 
-export function VoiceChat({ personas = DEFAULT_PERSONAS }: VoiceChatProps) {
+export function VoiceChat() {
+  // 本地状态管理
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [userMessage, setUserMessage] = useState<string>("");
+  const [aiMessage, setAiMessage] = useState<string>("");
+  const [errorMessage, setErrorMessage] = useState<string>("");
+
   // 使用全局状态
   const {
     callState,
-    selectedPersona,
-    audioStatus,
-    error,
-    messages,
     isMuted,
+    selectedPersona,
+    personas,
+    messages,
+    error,
     initializeServices,
     setSelectedPersona,
     connectCall,
@@ -67,28 +38,71 @@ export function VoiceChat({ personas = DEFAULT_PERSONAS }: VoiceChatProps) {
     toggleMute,
     sendMessage,
   } = useVoiceChatStore()
-  
-  // 格式化通话时间
-  const formatDuration = (seconds) => {
-    // 格式化逻辑
-  }
-  
-  // 组件挂载时初始化服务
+
+  // 每秒更新通话时间
   useEffect(() => {
-    initializeServices().catch(error => {
-      logger.error("初始化服务失败", error)
-      toast.error("初始化语音服务失败")
-    })
+    let timer: NodeJS.Timeout;
     
-    // 初始化人设
-    if (personas.length > 0 && !selectedPersona) {
-      setSelectedPersona(personas[0])
+    if (callState === CallState.CONNECTED || 
+        callState === CallState.SPEAKING || 
+        callState === CallState.LISTENING) {
+      timer = setInterval(() => {
+        setDuration(prev => prev + 1);
+      }, 1000);
     }
     
     return () => {
-      // 清理逻辑
+      if (timer) clearInterval(timer);
+    };
+  }, [callState]);
+  
+  // 模拟语音状态变化
+  useEffect(() => {
+    if (callState === CallState.SPEAKING) {
+      setIsSpeaking(true);
+    } else {
+      setIsSpeaking(false);
     }
-  }, [])
+  }, [callState]);
+
+  
+  // 格式化通话时间
+  const formatDuration = (seconds: number): string => {
+    if (!seconds) return "00:00";
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  
+  // 组件挂载时初始化服务 - 只在挂载时执行一次
+  useEffect(() => {
+    logger.info("开始初始化语音服务")
+    initializeServices().catch(err => {
+      logger.error("初始化服务失败", err)
+      toast.error("初始化语音服务失败")
+      setErrorMessage("初始化服务失败")
+    })
+    
+    return () => {
+      logger.info("组件卸载，清理语音服务资源")
+      // 组件卸载时的清理逻辑
+    }
+  }, []) // 依赖数组为空，只在挂载时运行一次
+  
+  // 单独处理人设初始化
+  useEffect(() => {
+    if (personas.length > 0 && !selectedPersona && personas[0]) {
+      logger.info("初始化默认人设")
+      setSelectedPersona(personas[0])
+    }
+  }, [personas, selectedPersona, setSelectedPersona])
+  
+  // 处理错误状态变化
+  useEffect(() => {
+    if (error) {
+      setErrorMessage(`错误: ${error.message}`)
+    }
+  }, [error])
   
   // 处理通话控制
   const handleCallStart = async () => {
@@ -116,8 +130,8 @@ export function VoiceChat({ personas = DEFAULT_PERSONAS }: VoiceChatProps) {
   }
   
   // 人设选择处理
-  const handlePersonaSelect = (persona) => {
-    if (callState !== "idle") {
+  const handlePersonaSelect = (persona: Persona) => {
+    if (callState !== CallState.IDLE) {
       handleCallEnd().then(() => {
         setSelectedPersona(persona)
       })
@@ -129,21 +143,38 @@ export function VoiceChat({ personas = DEFAULT_PERSONAS }: VoiceChatProps) {
   // 模拟发送消息
   const simulateUserMessage = () => {
     // 可以在开发环境下用于测试
+    const testMessage = "这是一条测试消息";
+    setUserMessage(testMessage);
+    sendMessage(testMessage).then(() => {
+      // 显示最新一条AI消息
+      if (messages.length > 0) {
+        const lastAiMessage = messages.findLast(m => m.role === 'assistant');
+        if (lastAiMessage) {
+          setAiMessage(lastAiMessage.content);
+        }
+      }
+    });
   }
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center justify-center space-y-6 rounded-xl bg-white p-6 shadow-lg">
       {/* 人设选择器 */}
-      {callState === "idle" && (
-        <PersonaSelector personas={personas} selectedPersona={selectedPersona} onSelect={handlePersonaSelect} />
+      {callState === CallState.IDLE && (
+        <PersonaSelector 
+          personas={personas} 
+          selectedPersona={selectedPersona ?? null}  
+          onSelect={handlePersonaSelect} 
+        />
       )}
 
       {/* 头像 */}
-      <Avatar
-        persona={selectedPersona}
-        size={callState === "idle" ? "large" : "medium"}
-        isActive={isSpeaking || callState === "speaking" || callState === "listening"}
-      />
+      {selectedPersona && (
+        <Avatar
+          persona={selectedPersona}
+          size={callState === CallState.IDLE ? "large" : "medium"}
+          isActive={isSpeaking || callState === CallState.SPEAKING || callState === CallState.LISTENING}
+        />
+      )}
 
       {/* 名称和状态 */}
       <CallStatus
@@ -153,10 +184,14 @@ export function VoiceChat({ personas = DEFAULT_PERSONAS }: VoiceChatProps) {
       />
 
       {/* 语音波形动画 */}
-      {(callState === "speaking" || callState === "listening") && <WaveAnimation isActive={isSpeaking} />}
+      {(callState === CallState.SPEAKING || callState === CallState.LISTENING) && (
+        <WaveAnimation isActive={isSpeaking} />
+      )}
 
       {/* 错误提示 */}
-      {errorMessage && <div className="text-sm text-red-500">{errorMessage}</div>}
+      {errorMessage && (
+        <div className="text-sm text-red-500">{errorMessage}</div>
+      )}
 
       {/* 通话控制按钮 */}
       <CallControls
@@ -168,7 +203,7 @@ export function VoiceChat({ personas = DEFAULT_PERSONAS }: VoiceChatProps) {
       />
 
       {/* 开发模式下显示消息内容和测试按钮 */}
-      {process.env.NODE_ENV === "development" && callState === "connected" && (
+      {process.env.NODE_ENV === "development" && callState === CallState.CONNECTED && (
         <div className="mt-4 w-full rounded bg-gray-50 p-2 text-xs">
           <button
             onClick={simulateUserMessage}
@@ -181,7 +216,7 @@ export function VoiceChat({ personas = DEFAULT_PERSONAS }: VoiceChatProps) {
               <span className="font-bold">你:</span> {userMessage}
             </p>
           )}
-          {aiMessage && (
+          {aiMessage && selectedPersona && (
             <p>
               <span className="font-bold">{selectedPersona.name}:</span> {aiMessage}
             </p>
@@ -189,13 +224,13 @@ export function VoiceChat({ personas = DEFAULT_PERSONAS }: VoiceChatProps) {
         </div>
       )}
 
-      {callState === "idle" && (
+      {callState === CallState.IDLE && selectedPersona && (
         <p className="mt-6 text-center text-xs text-gray-500 dark:text-gray-400">
           点击通话按钮开始与 {selectedPersona.name} 对话
         </p>
       )}
 
-      {callState === "connected" && (
+      {callState === CallState.CONNECTED && (
         <p className="mt-6 text-center text-xs text-gray-500 dark:text-gray-400">按住麦克风按钮说话，松开发送语音</p>
       )}
     </div>
