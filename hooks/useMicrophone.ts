@@ -23,6 +23,7 @@ export interface MicrophoneState {
   isPermissionGranted: boolean;
   isActive: boolean;
   isMuted: boolean;
+  isMonitoring: boolean;
   devices: AudioDevice[];
   selectedDevice: AudioDevice | null;
   volumeLevel: VolumeLevel;
@@ -36,6 +37,7 @@ export const useMicrophone = () => {
     isPermissionGranted: false,
     isActive: false,
     isMuted: false,
+    isMonitoring: false,
     devices: [],
     selectedDevice: null,
     volumeLevel: { current: 0, peak: 0, rms: 0 },
@@ -191,6 +193,77 @@ export const useMicrophone = () => {
       volumeLevel: { current: 0, peak: 0, rms: 0 },
     }));
   }, []);
+
+  // 停止音量监测（不影响录制状态）
+  const stopVolumeMonitoringOnly = useCallback(() => {
+    try {
+      // 停止音量监测
+      stopVolumeMonitoring();
+      
+      // 只有在不录制的情况下才关闭流
+      if (!state.isActive && mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+      }
+
+      setState(prev => ({ 
+        ...prev, 
+        isMonitoring: false,
+        error: null 
+      }));
+
+      logger.info('Volume monitoring stopped');
+    } catch (error) {
+      logger.error('Failed to stop volume monitoring', error);
+      setState(prev => ({ 
+        ...prev, 
+        error: error as Error 
+      }));
+    }
+  }, [stopVolumeMonitoring, state.isActive]);
+
+  // 开始音量监测（不录制，只监测）
+  const startVolumeMonitoringOnly = useCallback(async (deviceId?: string): Promise<MediaStream | null> => {
+    try {
+      if (!state.isPermissionGranted) {
+        const permitted = await checkPermission();
+        if (!permitted) {
+          return null;
+        }
+      }
+
+      const constraints: MediaStreamConstraints = {
+        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      mediaStreamRef.current = stream;
+
+      // 初始化音频分析器（仅用于音量监测）
+      initializeAudioAnalyzer(stream);
+      
+      // 开始音量监测
+      startVolumeMonitoring();
+
+      setState(prev => ({ 
+        ...prev, 
+        isMonitoring: true, 
+        isMuted: false, 
+        error: null 
+      }));
+
+      logger.info('Volume monitoring started', { deviceId });
+      return stream;
+    } catch (error) {
+      logger.error('Failed to start volume monitoring', error);
+      setState(prev => ({ 
+        ...prev, 
+        isMonitoring: false, 
+        error: error as Error 
+      }));
+      return null;
+    }
+  }, [state.isPermissionGranted, checkPermission, initializeAudioAnalyzer, startVolumeMonitoring]);
 
   // 开始录音
   const startRecording = useCallback(async (deviceId?: string): Promise<MediaStream | null> => {
@@ -383,6 +456,8 @@ export const useMicrophone = () => {
     stopRecording,
     toggleMute,
     switchDevice,
+    startVolumeMonitoringOnly,
+    stopVolumeMonitoringOnly,
     // 便捷属性
     hasDevices: state.devices.length > 0,
     volumePercentage: Math.round(state.volumeLevel.current * 100),

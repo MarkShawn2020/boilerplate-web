@@ -41,30 +41,16 @@ export function MicrophoneControl({ className, onRecordingStart, onRecordingStop
     hasDevices,
     volumePercentage,
     isRecording,
+    isMonitoring,
     checkPermission,
     getDevices,
     startRecording,
     stopRecording,
     toggleMute,
     switchDevice,
+    startVolumeMonitoringOnly,
+    stopVolumeMonitoringOnly,
   } = useMicrophone();
-
-  // 处理录音开始/停止
-  const handleToggleRecording = async () => {
-    try {
-      if (isActive) {
-        stopRecording();
-        onRecordingStop?.();
-      } else {
-        const stream = await startRecording(selectedDevice?.deviceId);
-        if (stream) {
-          onRecordingStart?.(stream);
-        }
-      }
-    } catch (err) {
-      onError?.(err as Error);
-    }
-  };
 
   // 处理设备切换
   const handleDeviceSwitch = async (deviceId: string) => {
@@ -97,6 +83,28 @@ export function MicrophoneControl({ className, onRecordingStart, onRecordingStop
     await getDevices();
   };
 
+  // 启动音频监测（仅监测，不录音）
+  const startMonitoring = async () => {
+    try {
+      if (!isPermissionGranted) {
+        await checkPermission();
+      }
+      const stream = await startVolumeMonitoringOnly();
+      if (stream) {
+        onRecordingStart?.(stream);
+      }
+    } catch (error) {
+      console.error('Failed to start monitoring:', error);
+      onError?.(error as Error);
+    }
+  };
+
+  // 停止音频监测
+  const stopMonitoring = () => {
+    stopVolumeMonitoringOnly();
+    onRecordingStop?.();
+  };
+
   // 点击外部关闭菜单
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -111,16 +119,32 @@ export function MicrophoneControl({ className, onRecordingStart, onRecordingStop
     }
   }, [isDeviceMenuOpen]);
 
+  // 组件挂载时自动启动音频监测
+  useEffect(() => {
+    if (isSupported && isPermissionGranted && !isMonitoring && !isActive) {
+      startMonitoring();
+    }
+  }, [isSupported, isPermissionGranted, isMonitoring, isActive]);
+
+  // 组件卸载时停止监测
+  useEffect(() => {
+    return () => {
+      if (isMonitoring) {
+        stopMonitoring();
+      }
+    };
+  }, [isMonitoring]);
+
   // 音量指示器
   const VolumeIndicator: React.FC = () => (
     <div className="flex items-center space-x-2">
       <div className="flex items-center space-x-1">
-        {volumePercentage > 0 ? (
+        {/* {volumePercentage > 0 ? ( */}
           <Volume2 className="h-4 w-4 text-green-500" />
-        ) : (
-          <VolumeX className="h-4 w-4 text-gray-400" />
-        )}
-        <span className="text-xs text-gray-500">{volumePercentage}%</span>
+        {/* ) : ( */}
+          {/* <VolumeX className="h-4 w-4 text-gray-400" /> */}
+        {/* )} */}
+        {/* <span className="text-xs text-gray-500">{volumePercentage.toFixed(2)}%</span> */}
       </div>
       
       {/* 音量条 */}
@@ -239,11 +263,45 @@ export function MicrophoneControl({ className, onRecordingStart, onRecordingStop
     <div className={cn("space-y-4", className)}>
 
       {/* 音量指示器 */}
-
-        <div className="p-3 bg-gray-50 rounded-lg">
+      <div className="p-3 bg-gray-50 rounded-lg">
+        <div className="flex items-center justify-between">
           <VolumeIndicator />
+          
+          {/* 监测控制按钮 */}
+          <div className="flex items-center space-x-2">
+            {isPermissionGranted ? (
+              <button
+                onClick={isMonitoring ? stopMonitoring : startMonitoring}
+                className={cn(
+                  "px-3 py-1 text-xs rounded-full transition-colors flex items-center space-x-1",
+                  isMonitoring 
+                    ? "bg-red-100 text-red-600 hover:bg-red-200" 
+                    : "bg-green-100 text-green-600 hover:bg-green-200"
+                )}
+              >
+                {isMonitoring ? (
+                  <>
+                    <MicOff className="h-3 w-3" />
+                    <span>停止监测</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="h-3 w-3" />
+                    <span>启动监测</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={checkPermission}
+                className="px-3 py-1 text-xs bg-blue-100 text-blue-600 hover:bg-blue-200 rounded-full transition-colors"
+              >
+                获取权限
+              </button>
+            )}
+          </div>
         </div>
-
+      </div>
 
       {/* 设置面板 */}
 
