@@ -6,7 +6,6 @@ import { toast } from "sonner"
 // 组件导入
 import { Avatar } from "./Avatar"
 import { CallControls } from "./CallControls"
-import { CallStatus } from "./CallStatus"
 import { MicrophoneControl } from "./MicrophoneControl"
 import { PersonaSelector } from "./PersonaSelector"
 import { VolumeVisualizer } from "./VolumeVisualizer"
@@ -180,29 +179,54 @@ export function VoiceChat() {
   return (
     <div className="h-full bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col w-full xs:max-w-md relative">
 
-              {/* 智能体状态显示 */}
-              {isConnected && (
-          <div className="absolute top-4 right-4 bg-green-50 border border-green-200 rounded-xl p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${isAgentActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-                <span className="text-sm font-medium text-green-800">
-                  智能体状态: {isAgentActive ? '已启动' : '未启动'}
-                </span>
-              </div>
-              {taskId && (
-                <span className="text-xs text-green-600 font-mono bg-green-100 px-2 py-1 rounded">
-                  {taskId.slice(-8)}
-                </span>
-              )}
+      {/* 右上角控制面板 */}
+      <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg shadow-sm">
+        {/* 智能体状态 */}
+        {isConnected && (
+          <div className="p-2 border-b border-gray-200 flex items-center gap-2 items-center">
+            <div className="flex items-center space-x-2">
+              <div className={`w-2 h-2 rounded-full ${isAgentActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+              <span className="text-xs text-gray-700">
+                {isAgentActive ? '智能体已启动' : '等待启动'}
+              </span>
             </div>
-            {selectedPersona && (
-              <div className="mt-2 text-xs text-green-600">
-                当前人设: {selectedPersona.name}
+            {duration > 0 && (
+              <div className="text-xs text-gray-500">
+                {formatDuration(duration)}
               </div>
             )}
           </div>
         )}
+        
+
+
+        {/* 麦克风设置控制 */}
+        {isConnected && (
+          <div className="p-2 border-t border-gray-200">
+            <button
+              onClick={() => setShowMicSettings(!showMicSettings)}
+              className="text-xs text-gray-600 hover:text-gray-800 transition-colors w-full text-center"
+            >
+              {showMicSettings ? '隐藏' : '显示'} 麦克风设置
+            </button>
+          </div>
+        )}
+
+              {/* 麦克风控制面板 */}
+      {showMicSettings && (
+        <div className="flex-shrink-0 p-4">
+          <MicrophoneControl
+            className="mx-auto max-w-2xl"
+            onRecordingStart={startRecording}
+            onRecordingStop={stopRecording}
+            onError={(error) => {
+              logger.error('Microphone error', error);
+              toast.error(`Microphone error: ${error.message}`);
+            }}
+          />
+        </div>
+      )}
+      </div>
 
       {/* 人设选择器 */}
       {callState === CallState.IDLE && (
@@ -244,17 +268,6 @@ export function VoiceChat() {
             <VolumeVisualizer level={audioLevel} />
           </div>
         )}
-
-        {/* 通话状态 */}
-        {isConnected && (
-          <CallStatus
-            state={callState}
-            duration={formatDuration(duration)}
-            isMuted={isMuted}
-          />
-        )}
-
-
 
         {/* 对话消息显示区域 */}
         {(messages.length > 0 || realtimeSubtitles.size > 0) && (
@@ -319,6 +332,18 @@ export function VoiceChat() {
           </div>
         )}
 
+                {/* 主要通话控制 */}
+                <div className="p-2">
+          <CallControls
+            callState={callState}
+            isMuted={isMuted}
+            onStartCall={handleCallStart}
+            onEndCall={handleCallEnd}
+            onToggleMute={handleToggleMute}
+            compact={false}
+          />
+        </div>
+
         {/* 错误提示 */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 max-w-md">
@@ -327,54 +352,16 @@ export function VoiceChat() {
         )}
       </div>
 
-      {/* 底部控制面板 */}
-      <div className="flex-shrink-0 p-4 space-y-4">
 
-        {/* 主要通话控制 */}
-        <CallControls
-          callState={callState}
-          isMuted={isMuted}
-          onStartCall={handleCallStart}
-          onEndCall={handleCallEnd}
-          onToggleMute={handleToggleMute}
-        />
 
-        {/* 麦克风设置按钮 */}
-        <div className="flex justify-center">
-          <button
-            onClick={() => setShowMicSettings(!showMicSettings)}
-            className="text-sm text-gray-600 hover:text-gray-800 transition-colors"
-          >
-            {showMicSettings ? 'Hide' : 'Show'} Microphone Settings
-          </button>
-        </div>
+      {/* 提示文字 */}
+      {callState === CallState.IDLE && selectedPersona && (
+        <p className="text-center text-sm text-gray-500">
+          点击通话按钮开始与 {selectedPersona.name} 对话
+        </p>
+      )}
 
-        {/* 麦克风控制面板 */}
-        {showMicSettings && (
-          <MicrophoneControl
-            className="mx-auto max-w-2xl"
-            onRecordingStart={startRecording}
-            onRecordingStop={stopRecording}
-            onError={(error) => {
-              logger.error('Microphone error', error);
-              toast.error(`Microphone error: ${error.message}`);
-            }}
-          />
-        )}
 
-        {/* 提示文字 */}
-        {callState === CallState.IDLE && selectedPersona && (
-          <p className="text-center text-sm text-gray-500">
-            点击通话按钮开始与 {selectedPersona.name} 对话
-          </p>
-        )}
-
-        {isConnected && (
-          <p className="text-center text-sm text-gray-500">
-            保持通话，AI正在{callState === CallState.SPEAKING ? '说话' : '聆听'}
-          </p>
-        )}
-      </div>
     </div>
   )
 }

@@ -6,6 +6,7 @@ interface CallControlsProps {
   onStartCall: () => void
   onEndCall: () => void
   onToggleMute: () => void
+  compact?: boolean
 }
 
 export function CallControls({ 
@@ -13,18 +14,26 @@ export function CallControls({
   isMuted, 
   onStartCall, 
   onEndCall, 
-  onToggleMute 
+  onToggleMute,
+  compact = false
 }: CallControlsProps) {
+  
+  // 紧凑模式的样式
+  const buttonSizes = compact 
+    ? { main: 'w-8 h-8', secondary: 'w-6 h-6', text: 'text-sm' }
+    : { main: 'w-16 h-16', secondary: 'w-12 h-12', text: 'text-2xl' }
+  
+  const spacing = compact ? 'space-x-2' : 'space-x-6'
   
   if (callState === "idle") {
     return (
       <div className="flex justify-center">
         <button
           onClick={onStartCall}
-          className="w-16 h-16 bg-green-500 hover:bg-green-600 text-white rounded-full 
-                   shadow-lg hover:shadow-xl transition-all duration-200 
-                   flex items-center justify-center text-2xl hover:scale-105
-                   focus:outline-none focus:ring-4 focus:ring-green-500/30"
+          className={`${buttonSizes.main} bg-green-500 hover:bg-green-600 text-white rounded-full 
+                     shadow-lg hover:shadow-xl transition-all duration-200 
+                     flex items-center justify-center ${buttonSizes.text} hover:scale-105
+                     focus:outline-none focus:ring-4 focus:ring-green-500/30 p-12  `}
         >
           📞
         </button>
@@ -35,9 +44,9 @@ export function CallControls({
   if (callState === "connecting") {
     return (
       <div className="flex justify-center">
-        <div className="w-16 h-16 bg-blue-500 text-white rounded-full 
-                       shadow-lg flex items-center justify-center text-2xl
-                       animate-pulse">
+        <div className={`${buttonSizes.main} bg-blue-500 text-white rounded-full 
+                       shadow-lg flex items-center justify-center ${buttonSizes.text}
+                       animate-pulse`}>
           ⏳
         </div>
       </div>
@@ -45,12 +54,12 @@ export function CallControls({
   }
 
   return (
-    <div className="flex justify-center space-x-6">
+    <div className={`flex justify-center ${spacing}`}>
       {/* 静音按钮 */}
       <button
         onClick={onToggleMute}
-        className={`w-12 h-12 rounded-full shadow-lg transition-all duration-200 
-                   flex items-center justify-center text-xl hover:scale-105
+        className={`${buttonSizes.secondary} rounded-full shadow-lg transition-all duration-200 
+                   flex items-center justify-center text-lg hover:scale-105
                    focus:outline-none focus:ring-4 focus:ring-opacity-30
                    ${isMuted 
                      ? 'bg-red-500 hover:bg-red-600 text-white focus:ring-red-500' 
@@ -63,24 +72,26 @@ export function CallControls({
       {/* 挂断按钮 */}
       <button
         onClick={onEndCall}
-        className="w-16 h-16 bg-red-500 hover:bg-red-600 text-white rounded-full 
-                 shadow-lg hover:shadow-xl transition-all duration-200 
-                 flex items-center justify-center text-2xl hover:scale-105
-                 focus:outline-none focus:ring-4 focus:ring-red-500/30"
+        className={`${buttonSizes.main} bg-red-500 hover:bg-red-600 text-white rounded-full 
+                   shadow-lg hover:shadow-xl transition-all duration-200 
+                   flex items-center justify-center ${buttonSizes.text} hover:scale-105
+                   focus:outline-none focus:ring-4 focus:ring-red-500/30`}
       >
         📵
       </button>
 
-      {/* 扬声器按钮 */}
-      <button
-        className="w-12 h-12 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full 
-                 shadow-lg transition-all duration-200 
-                 flex items-center justify-center text-xl hover:scale-105
-                 focus:outline-none focus:ring-4 focus:ring-gray-500/30
-                 dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-white"
-      >
-        🔊
-      </button>
+      {!compact && (
+        /* 扬声器按钮 - 仅在非紧凑模式显示 */
+        <button
+          className={`${buttonSizes.secondary} bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full 
+                     shadow-lg transition-all duration-200 
+                     flex items-center justify-center text-xl hover:scale-105
+                     focus:outline-none focus:ring-4 focus:ring-gray-500/30
+                     dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-white`}
+        >
+          🔊
+        </button>
+      )}
     </div>
   )
 }

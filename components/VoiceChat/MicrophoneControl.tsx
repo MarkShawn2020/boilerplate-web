@@ -237,69 +237,16 @@ export function MicrophoneControl({ className, onRecordingStart, onRecordingStop
 
   return (
     <div className={cn("space-y-4", className)}>
-      {/* 主控制面板 */}
-      <div className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg">
-        <div className="flex items-center space-x-4">
-          {/* 录音按钮 */}
-          <button
-            onClick={handleToggleRecording}
-            disabled={!isPermissionGranted}
-            className={cn(
-              "p-3 rounded-full transition-all duration-200",
-              isRecording
-                ? "bg-red-500 hover:bg-red-600 text-white"
-                : "bg-gray-100 hover:bg-gray-200 text-gray-700",
-              !isPermissionGranted && "opacity-50 cursor-not-allowed"
-            )}
-          >
-            {isRecording ? (
-              <MicOff className="h-6 w-6" />
-            ) : (
-              <Mic className="h-6 w-6" />
-            )}
-          </button>
-
-          {/* 静音按钮 */}
-          {isActive && (
-            <button
-              onClick={toggleMute}
-              className={cn(
-                "p-2 rounded-lg transition-colors",
-                isMuted
-                  ? "bg-red-100 text-red-600 hover:bg-red-200"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              )}
-            >
-              {isMuted ? (
-                <MicOff className="h-4 w-4" />
-              ) : (
-                <Mic className="h-4 w-4" />
-              )}
-            </button>
-          )}
-
-          {/* 状态指示器 */}
-          <StatusIndicator />
-        </div>
-
-        {/* 设置按钮 */}
-        <button
-          onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-          className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <Settings className="h-4 w-4" />
-        </button>
-      </div>
 
       {/* 音量指示器 */}
-      {isActive && (
+
         <div className="p-3 bg-gray-50 rounded-lg">
           <VolumeIndicator />
         </div>
-      )}
+
 
       {/* 设置面板 */}
-      {isSettingsOpen && (
+
         <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-gray-900">Microphone Settings</h3>
@@ -360,7 +307,6 @@ export function MicrophoneControl({ className, onRecordingStart, onRecordingStop
             </div>
           )}
         </div>
-      )}
 
       {/* 错误显示 */}
       <ErrorDisplay />
