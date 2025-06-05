@@ -155,7 +155,7 @@ export function VoiceChat() {
   })
 
   return (
-    <div className="h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col w-full xs:max-w-md">
+    <div className=" bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col w-full xs:max-w-md">
       {/* 顶部状态栏 */}
       <div className="flex-shrink-0 p-4">
         <CallStatus 
