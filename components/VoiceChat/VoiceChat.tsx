@@ -156,6 +156,20 @@ export function VoiceChat() {
     });
   }
 
+  logger.info("当前状态:", {
+    callState,
+    isMuted,
+    selectedPersona,
+    personas,
+    messages,
+    error,
+    isSpeaking,
+    duration,
+    userMessage,
+    aiMessage,
+    errorMessage
+  })
+
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center justify-center space-y-6 rounded-xl bg-white p-6 shadow-lg">
       {/* 人设选择器 */}
@@ -184,9 +198,9 @@ export function VoiceChat() {
       />
 
       {/* 语音波形动画 */}
-      {(callState === CallState.SPEAKING || callState === CallState.LISTENING) && (
+      {/* {(callState === CallState.SPEAKING || callState === CallState.LISTENING) && ( */}
         <WaveAnimation isActive={isSpeaking} />
-      )}
+      {/* )} */}
 
       {/* 错误提示 */}
       {errorMessage && (
