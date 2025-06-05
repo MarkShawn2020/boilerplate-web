@@ -123,13 +123,13 @@ export async function startVoiceChatAction(request: StartVoiceChatRequest): Prom
     logger.info('Server Action: 启动智能体', request);
 
     // 生成唯一任务ID
-    const taskId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const taskId = process.env.NEXT_PUBLIC_RTC_USER_ID || `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     // 构造 StartVoiceChat API 请求参数
     const apiParams = {
       AppId: process.env.NEXT_PUBLIC_RTC_APP_ID || request.appId,
       RoomId: process.env.NEXT_PUBLIC_RTC_ROOM_ID || request.roomId,
-      TaskId: process.env.NEXT_PUBLIC_RTC_USER_ID || taskId,
+      TaskId: taskId,
       Config: {
         LLMConfig: {
           Mode: 'ArkV3',
@@ -224,6 +224,7 @@ export async function stopVoiceChatAction(request: StopVoiceChatRequest): Promis
 
     const apiParams = {
       AppId: process.env.NEXT_PUBLIC_RTC_APP_ID || '',
+      RoomId: process.env.NEXT_PUBLIC_RTC_ROOM_ID || 'Room123',
       TaskId: request.TaskId,
     };
 
