@@ -1,0 +1,367 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { logger } from '../services/logger';
+
+// 音频设备接口
+export interface AudioDevice {
+  deviceId: string;
+  label: string;
+  kind: 'audioinput' | 'audiooutput';
+}
+
+// 音量级别
+export interface VolumeLevel {
+  current: number;
+  peak: number;
+  rms: number;
+}
+
+// 麦克风状态
+export interface MicrophoneState {
+  isSupported: boolean;
+  isPermissionGranted: boolean;
+  isActive: boolean;
+  isMuted: boolean;
+  devices: AudioDevice[];
+  selectedDevice: AudioDevice | null;
+  volumeLevel: VolumeLevel;
+  error: Error | null;
+}
+
+// 麦克风 Hook
+export const useMicrophone = () => {
+  const [state, setState] = useState<MicrophoneState>({
+    isSupported: typeof navigator !== 'undefined' && !!navigator.mediaDevices,
+    isPermissionGranted: false,
+    isActive: false,
+    isMuted: false,
+    devices: [],
+    selectedDevice: null,
+    volumeLevel: { current: 0, peak: 0, rms: 0 },
+    error: null,
+  });
+
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const volumeTimerRef = useRef<number | null>(null);
+  const dataArrayRef = useRef<Uint8Array | null>(null);
+
+  // 检查麦克风权限
+  const checkPermission = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!state.isSupported) {
+        throw new Error('Media devices not supported');
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      
+      setState(prev => ({ ...prev, isPermissionGranted: true, error: null }));
+      logger.info('Microphone permission granted');
+      return true;
+    } catch (error) {
+      const err = error as Error;
+      setState(prev => ({ 
+        ...prev, 
+        isPermissionGranted: false, 
+        error: new Error(`Permission denied: ${err.message}`) 
+      }));
+      logger.error('Microphone permission denied', error);
+      return false;
+    }
+  }, [state.isSupported]);
+
+  // 获取音频设备列表
+  const getDevices = useCallback(async (): Promise<AudioDevice[]> => {
+    try {
+      if (!state.isSupported) {
+        return [];
+      }
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioDevices: AudioDevice[] = devices
+        .filter(device => device.kind === 'audioinput')
+        .map(device => ({
+          deviceId: device.deviceId,
+          label: device.label || `Microphone ${device.deviceId}`,
+          kind: device.kind as 'audioinput',
+        }));
+
+      setState(prev => ({ ...prev, devices: audioDevices }));
+      logger.info(`Found ${audioDevices.length} audio input devices`);
+      return audioDevices;
+    } catch (error) {
+      logger.error('Failed to get audio devices', error);
+      setState(prev => ({ ...prev, error: error as Error }));
+      return [];
+    }
+  }, [state.isSupported]);
+
+  // 初始化音频分析器
+  const initializeAudioAnalyzer = useCallback((stream: MediaStream) => {
+    try {
+      // 创建音频上下文
+      audioContextRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const audioContext = audioContextRef.current;
+
+      // 创建音频源
+      const source = audioContext.createMediaStreamSource(stream);
+      
+      // 创建分析器
+      analyserRef.current = audioContext.createAnalyser();
+      analyserRef.current.fftSize = 256;
+      analyserRef.current.smoothingTimeConstant = 0.3;
+      
+      // 连接音频源到分析器
+      source.connect(analyserRef.current);
+      
+      // 初始化数据数组
+      const bufferLength = analyserRef.current.frequencyBinCount;
+      dataArrayRef.current = new Uint8Array(bufferLength);
+      
+      logger.info('Audio analyzer initialized');
+    } catch (error) {
+      logger.error('Failed to initialize audio analyzer', error);
+    }
+  }, []);
+
+  // 分析音量级别
+  const analyzeVolume = useCallback(() => {
+    if (!analyserRef.current || !dataArrayRef.current) {
+      return;
+    }
+
+    try {
+      analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+      
+      // 计算 RMS 和峰值
+      let sum = 0;
+      let peak = 0;
+      
+      for (let i = 0; i < dataArrayRef.current.length; i++) {
+        const value = dataArrayRef.current[i];
+        if (value !== undefined) {
+          sum += value * value;
+          peak = Math.max(peak, value);
+        }
+      }
+      
+      const rms = Math.sqrt(sum / dataArrayRef.current.length);
+      const normalizedRms = rms / 255;
+      const normalizedPeak = peak / 255;
+      
+      setState(prev => ({
+        ...prev,
+        volumeLevel: {
+          current: normalizedRms,
+          peak: normalizedPeak,
+          rms: normalizedRms,
+        },
+      }));
+    } catch (error) {
+      logger.error('Failed to analyze volume', error);
+    }
+  }, []);
+
+  // 开始音量监测
+  const startVolumeMonitoring = useCallback(() => {
+    if (volumeTimerRef.current) {
+      return;
+    }
+
+    const monitor = () => {
+      analyzeVolume();
+      volumeTimerRef.current = requestAnimationFrame(monitor);
+    };
+    
+    monitor();
+  }, [analyzeVolume]);
+
+  // 停止音量监测
+  const stopVolumeMonitoring = useCallback(() => {
+    if (volumeTimerRef.current) {
+      cancelAnimationFrame(volumeTimerRef.current);
+      volumeTimerRef.current = null;
+    }
+    
+    setState(prev => ({
+      ...prev,
+      volumeLevel: { current: 0, peak: 0, rms: 0 },
+    }));
+  }, []);
+
+  // 开始录音
+  const startRecording = useCallback(async (deviceId?: string): Promise<MediaStream | null> => {
+    try {
+      if (!state.isPermissionGranted) {
+        const permitted = await checkPermission();
+        if (!permitted) {
+          return null;
+        }
+      }
+
+      const constraints: MediaStreamConstraints = {
+        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      mediaStreamRef.current = stream;
+
+      // 初始化音频分析器
+      initializeAudioAnalyzer(stream);
+      
+      // 开始音量监测
+      startVolumeMonitoring();
+
+      setState(prev => ({ 
+        ...prev, 
+        isActive: true, 
+        isMuted: false, 
+        error: null 
+      }));
+
+      logger.info('Recording started', { deviceId });
+      return stream;
+    } catch (error) {
+      logger.error('Failed to start recording', error);
+      setState(prev => ({ 
+        ...prev, 
+        isActive: false, 
+        error: error as Error 
+      }));
+      return null;
+    }
+  }, [state.isPermissionGranted, checkPermission, initializeAudioAnalyzer, startVolumeMonitoring]);
+
+  // 停止录音
+  const stopRecording = useCallback(() => {
+    try {
+      // 停止媒体流
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+      }
+
+      // 关闭音频上下文
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+
+      // 停止音量监测
+      stopVolumeMonitoring();
+
+      setState(prev => ({ 
+        ...prev, 
+        isActive: false, 
+        isMuted: false,
+        error: null
+      }));
+
+      logger.info('Recording stopped');
+    } catch (error) {
+      logger.error('Failed to stop recording', error);
+      setState(prev => ({ ...prev, error: error as Error }));
+    }
+  }, [stopVolumeMonitoring]);
+
+  // 切换静音
+  const toggleMute = useCallback(() => {
+    if (!mediaStreamRef.current) {
+      return;
+    }
+
+    const audioTracks = mediaStreamRef.current.getAudioTracks();
+    const newMutedState = !state.isMuted;
+
+    audioTracks.forEach(track => {
+      track.enabled = !newMutedState;
+    });
+
+    setState(prev => ({ ...prev, isMuted: newMutedState }));
+    logger.info(`Microphone ${newMutedState ? 'muted' : 'unmuted'}`);
+  }, [state.isMuted]);
+
+  // 切换设备
+  const switchDevice = useCallback(async (deviceId: string) => {
+    const targetDevice = state.devices.find(device => device.deviceId === deviceId);
+    if (!targetDevice) {
+      logger.warn('Target device not found', { deviceId });
+      return;
+    }
+
+    try {
+      // 如果当前在录音，先停止
+      const wasActive = state.isActive;
+      if (wasActive) {
+        stopRecording();
+      }
+
+      // 更新选中的设备
+      setState(prev => ({ ...prev, selectedDevice: targetDevice }));
+
+      // 如果之前在录音，用新设备重新开始
+      if (wasActive) {
+        await startRecording(deviceId);
+      }
+
+      logger.info('Device switched', { deviceId, label: targetDevice.label });
+    } catch (error) {
+      logger.error('Failed to switch device', error);
+      setState(prev => ({ ...prev, error: error as Error }));
+    }
+  }, [state.devices, state.isActive, stopRecording, startRecording]);
+
+  // 初始化
+  useEffect(() => {
+    const initialize = async () => {
+      if (state.isSupported) {
+        await checkPermission();
+        await getDevices();
+      }
+    };
+
+    initialize();
+  }, [state.isSupported, checkPermission, getDevices]);
+
+  // 监听设备变化
+  useEffect(() => {
+    if (!state.isSupported) {
+      return;
+    }
+
+    const handleDeviceChange = () => {
+      getDevices();
+    };
+
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    };
+  }, [state.isSupported, getDevices]);
+
+  // 清理
+  useEffect(() => {
+    return () => {
+      stopRecording();
+    };
+  }, [stopRecording]);
+
+  return {
+    ...state,
+    // 方法
+    checkPermission,
+    getDevices,
+    startRecording,
+    stopRecording,
+    toggleMute,
+    switchDevice,
+    // 便捷属性
+    hasDevices: state.devices.length > 0,
+    volumePercentage: Math.round(state.volumeLevel.current * 100),
+    isRecording: state.isActive && !state.isMuted,
+  };
+};

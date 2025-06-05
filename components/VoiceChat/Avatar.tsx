@@ -36,8 +36,8 @@ export function Avatar({ persona, size = "medium", isActive = false }: AvatarPro
         <Image 
           src={persona.avatar}
           alt={`${persona.name} avatar`}
-          width={sizePx[size]}
-          height={sizePx[size]}
+          width={sizePx[size] ?? 128}
+          height={sizePx[size] ?? 128}
           className="object-cover w-full h-full"
           priority={size === "large"}
         />
