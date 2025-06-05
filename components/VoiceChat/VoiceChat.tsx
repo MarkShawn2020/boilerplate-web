@@ -178,7 +178,31 @@ export function VoiceChat() {
   })
 
   return (
-    <div className="h-full bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col w-full xs:max-w-md">
+    <div className="h-full bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col w-full xs:max-w-md relative">
+
+              {/* 智能体状态显示 */}
+              {isConnected && (
+          <div className="absolute top-4 right-4 bg-green-50 border border-green-200 rounded-xl p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className={`w-3 h-3 rounded-full ${isAgentActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+                <span className="text-sm font-medium text-green-800">
+                  智能体状态: {isAgentActive ? '已启动' : '未启动'}
+                </span>
+              </div>
+              {taskId && (
+                <span className="text-xs text-green-600 font-mono bg-green-100 px-2 py-1 rounded">
+                  {taskId.slice(-8)}
+                </span>
+              )}
+            </div>
+            {selectedPersona && (
+              <div className="mt-2 text-xs text-green-600">
+                当前人设: {selectedPersona.name}
+              </div>
+            )}
+          </div>
+        )}
 
       {/* 人设选择器 */}
       {callState === CallState.IDLE && (
@@ -230,64 +254,21 @@ export function VoiceChat() {
           />
         )}
 
-        {/* 智能体状态显示 */}
-        {isConnected && (
-          <div className="w-full max-w-2xl bg-green-50 border border-green-200 rounded-xl p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${isAgentActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-                <span className="text-sm font-medium text-green-800">
-                  智能体状态: {isAgentActive ? '已启动' : '未启动'}
-                </span>
-              </div>
-              {taskId && (
-                <span className="text-xs text-green-600 font-mono bg-green-100 px-2 py-1 rounded">
-                  {taskId.slice(-8)}
-                </span>
-              )}
-            </div>
-            {selectedPersona && (
-              <div className="mt-2 text-xs text-green-600">
-                当前人设: {selectedPersona.name}
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* 实时字幕显示 */}
-        {isConnected && realtimeSubtitles.size > 0 && (
-          <div className="w-full max-w-2xl bg-blue-50 border border-blue-200 rounded-xl p-4 min-h-16">
-            <h4 className="text-sm font-medium text-blue-800 mb-2">实时字幕</h4>
-            <div className="space-y-2">
-              {Array.from(realtimeSubtitles.values()).map((subtitle) => (
-                <div key={subtitle.userId} className="flex items-start space-x-2">
-                  <span className="text-xs text-blue-600 font-medium">
-                    {subtitle.userId.toLowerCase().startsWith('bot') ? 'AI' : '用户'}:
-                  </span>
-                  <span className="text-sm text-blue-700 flex-1">
-                    {subtitle.text}
-                    {!subtitle.isComplete && (
-                      <span className="inline-block w-2 h-4 bg-blue-400 ml-1 animate-pulse" />
-                    )}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* 对话消息显示区域 */}
-        {messages.length > 0 && (
+        {(messages.length > 0 || realtimeSubtitles.size > 0) && (
           <div className="w-full max-w-2xl bg-white/80 backdrop-blur-sm rounded-xl p-4 max-h-64 overflow-y-auto">
             <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
               <span>对话记录</span>
-              {messages.some(m => m.isFromSubtitle) && (
+              {isConnected && (
                 <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                  实时转写
+                  实时语音识别
                 </span>
               )}
             </h4>
             <div className="space-y-3">
+              {/* 显示完整的聊天记录 */}
               {messages.map((message, index) => (
                 <div
                   key={message.id || index}
@@ -301,16 +282,39 @@ export function VoiceChat() {
                     }`}
                   >
                     <p className="text-sm">{message.content}</p>
-                    {message.isFromSubtitle && (
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white" 
-                           title="来自实时字幕" />
-                    )}
                     <div className="text-xs opacity-70 mt-1">
                       {new Date(message.timestamp).toLocaleTimeString()}
                     </div>
                   </div>
                 </div>
               ))}
+              
+              {/* 显示正在进行的实时语音识别 */}
+              {Array.from(realtimeSubtitles.values()).map((subtitle) => {
+                const isUser = !subtitle.userId.toLowerCase().startsWith('bot');
+                return (
+                  <div
+                    key={subtitle.userId}
+                    className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg relative ${
+                        isUser
+                          ? 'bg-blue-400/70 text-white'
+                          : 'bg-gray-300/70 text-gray-800'
+                      }`}
+                    >
+                      <p className="text-sm">{subtitle.text}</p>
+                      {!subtitle.isComplete && (
+                        <span className="inline-block w-2 h-4 bg-current ml-1 animate-pulse opacity-50" />
+                      )}
+                      <div className="text-xs opacity-70 mt-1">
+                        正在识别...
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
