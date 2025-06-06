@@ -40,6 +40,7 @@ export function VoiceChat() {
     realtimeSubtitles,
     taskId,
     isAgentActive,
+    initializeServices
   } = useVoiceChatStore()
 
   // 使用 useVoiceChat hook
@@ -105,7 +106,6 @@ export function VoiceChat() {
     logger.info("开始初始化语音服务")
     const initServices = async () => {
       try {
-        const { initializeServices } = useVoiceChatStore.getState();
         await initializeServices();
         logger.info("语音服务初始化成功");
       } catch (err) {
