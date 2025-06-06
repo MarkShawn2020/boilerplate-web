@@ -9,6 +9,20 @@ import { RealtimeSubtitle, SubtitleParser } from '../lib/subtitle-parser';
 import type { SubtitleData } from '../lib/subtitle-parser';
 import { logger } from '../lib/logger';
 import { startVoiceChatAction, stopVoiceChatAction } from '../app/actions/voice-chat-actions';
+import VERTC, {
+  AutoPlayFailedEvent,
+  DeviceInfo,
+  LocalAudioPropertiesInfo,
+  MediaType,
+  NetworkQuality,
+  onUserJoinedEvent,
+  onUserLeaveEvent,
+  PlayerEvent,
+  RemoteAudioPropertiesInfo,
+  StreamIndex,
+  StreamRemoveReason,
+} from "@volcengine/rtc";
+import { toast } from "sonner";
 
 // 人设接口
 export interface Persona {
@@ -51,7 +65,7 @@ export interface RealtimeSubtitle {
 
 // 语音对话存储状态
 export interface VoiceChatState {
-  // 用户配置
+  // 基础配置
   rtcAppId: string;
   rtcToken: string;
   rtcRoomId: string;
@@ -65,36 +79,60 @@ export interface VoiceChatState {
   callState: CallState;
   audioStatus: AudioStatus;
   error: Error | null;
+  taskId: string | null;
+  isAgentActive: boolean;
   
-  // 智能体任务状态
-  taskId: string | null; // 智能体任务ID
-  isAgentActive: boolean; // 智能体是否激活
-  
-  // 对话记录
-  messages: ChatMessage[];
-  
-  // 实时字幕
-  realtimeSubtitles: Map<string, RealtimeSubtitle>; // userId -> 当前实时字幕
-  
-  // 音频状态
+  // 音频相关
+  audioLevel: number;
   isMuted: boolean;
+  isRecording: boolean;
   
-  // 服务初始化状态
+  // 消息和字幕
+  messages: ChatMessage[];
+  realtimeSubtitles: Map<string, RealtimeSubtitle>;
+  
+  // 服务状态
   isServicesInitialized: boolean;
   
-  // Actions
+  // 内部状态（用于 RTC 事件监听）
+  playStatus: { [key: string]: { audio: boolean } };
+  
+  // === 初始化方法 ===
   initializeServices: () => Promise<void>;
+  initializeRTCListeners: () => void;
+  cleanupRTCListeners: () => void;
+  
+  // === RTC 事件处理方法 ===
+  handleError: (e: { errorCode: typeof VERTC.ErrorCode }) => void;
+  handleUserJoin: (e: onUserJoinedEvent) => void;
+  handleUserLeave: (e: onUserLeaveEvent) => void;
+  handleUserPublishStream: (e: { userId: string; mediaType: MediaType }) => void;
+  handleUserUnpublishStream: (e: { userId: string; mediaType: MediaType; reason: StreamRemoveReason }) => void;
+  handleLocalAudioPropertiesReport: (e: LocalAudioPropertiesInfo[]) => void;
+  handleRemoteAudioPropertiesReport: (e: RemoteAudioPropertiesInfo[]) => void;
+  handleAudioDeviceStateChanged: (device: DeviceInfo) => void;
+  handleAutoPlayFail: (event: AutoPlayFailedEvent) => void;
+  handlePlayerEvent: (event: PlayerEvent) => void;
+  handleUserStartAudioCapture: (e: { userId: string }) => void;
+  handleUserStopAudioCapture: (e: { userId: string }) => void;
+  handleNetworkQuality: (uplink: NetworkQuality, downlink: NetworkQuality) => void;
+  handleRoomBinaryMessageReceived: (event: { userId: string; message: ArrayBuffer }) => void;
+  
+  // === 业务方法 ===
   setSelectedPersona: (persona: Persona) => void;
   connectCall: () => Promise<void>;
   disconnectCall: () => Promise<void>;
+  startRecording: () => Promise<void>;
+  stopRecording: () => Promise<void>;
+  switchDevice: (deviceId: string) => Promise<void>;
   toggleMute: () => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
-  processSubtitleMessage: (message: Uint8Array) => void; // 新增：处理字幕消息
-  addChatMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => void; // 新增：添加聊天记录
-  updateRealtimeSubtitle: (userId: string, subtitle: RealtimeSubtitle) => void; // 新增：更新实时字幕
-  clearRealtimeSubtitle: (userId: string) => void; // 新增：清除实时字幕
-  startAgent: () => Promise<void>; // 新增：启动智能体
-  stopAgent: () => Promise<void>; // 新增：停止智能体
+  processSubtitleMessage: (message: Uint8Array) => void;
+  addChatMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
+  updateRealtimeSubtitle: (userId: string, subtitle: RealtimeSubtitle) => void;
+  clearRealtimeSubtitle: (userId: string) => void;
+  startAgent: () => Promise<void>;
+  stopAgent: () => Promise<void>;
   reset: () => void;
 }
 
@@ -117,18 +155,20 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
     isProcessing: false,
   },
   error: null,
-  
   taskId: null,
   isAgentActive: false,
   
-  messages: [],
+  audioLevel: 0,
+  isMuted: false,
+  isRecording: false,
   
+  messages: [],
   realtimeSubtitles: new Map(),
   
-  isMuted: false,
-  
   isServicesInitialized: false,
-  
+  playStatus: {},
+
+
   // 初始化服务
   initializeServices: async () => {
     try {
@@ -155,6 +195,186 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
     } catch (error) {
       logger.error('Failed to initialize services', error);
       set({ error: error as Error });
+    }
+  },
+  
+  // 初始化 RTC 事件监听
+  initializeRTCListeners: () => {
+    const listeners = {
+      handleError: get().handleError,
+      handleUserJoin: get().handleUserJoin,
+      handleUserLeave: get().handleUserLeave,
+      handleUserPublishStream: get().handleUserPublishStream,
+      handleUserUnpublishStream: get().handleUserUnpublishStream,
+      handleLocalAudioPropertiesReport: get().handleLocalAudioPropertiesReport,
+      handleRemoteAudioPropertiesReport: get().handleRemoteAudioPropertiesReport,
+      handleAudioDeviceStateChanged: get().handleAudioDeviceStateChanged,
+      handleAutoPlayFail: get().handleAutoPlayFail,
+      handlePlayerEvent: get().handlePlayerEvent,
+      handleUserStartAudioCapture: get().handleUserStartAudioCapture,
+      handleUserStopAudioCapture: get().handleUserStopAudioCapture,
+      handleNetworkQuality: get().handleNetworkQuality,
+      handleRoomBinaryMessageReceived: get().handleRoomBinaryMessageReceived,
+    };
+
+    rtcClient.registerEventListeners(listeners);
+    logger.info("RTC 事件监听器已注册");
+  },
+  
+  // 清理 RTC 事件监听
+  cleanupRTCListeners: () => {
+    rtcClient.unregisterEventListeners();
+    logger.info("RTC 事件监听器已清理");
+  },
+  
+  // 处理 RTC 错误事件
+  handleError: (e: { errorCode: typeof VERTC.ErrorCode }) => {
+    const { errorCode } = e;
+    logger.error("RTC 错误:", errorCode);
+
+    if (errorCode === VERTC.ErrorCode.DUPLICATE_LOGIN) {
+      toast.error("重复登录，已被踢出房间");
+    } else {
+      toast.error(`RTC 连接错误: ${errorCode}`);
+    }
+    
+    set({ 
+      callState: CallState.ERROR,
+      error: new Error(`RTC Error: ${errorCode}`)
+    });
+  },
+
+  // 处理用户加入事件
+  handleUserJoin: (e: onUserJoinedEvent) => {
+    const userId = e.userInfo.userId;
+    logger.info(`用户加入房间: ${userId}`);
+    
+    // 可以在这里添加用户加入的业务逻辑
+  },
+
+  // 处理用户离开事件
+  handleUserLeave: (e: onUserLeaveEvent) => {
+    const userId = e.userInfo.userId;
+    logger.info(`用户离开房间: ${userId}`);
+    
+    // 清理播放状态
+    set(state => ({
+      playStatus: {
+        ...state.playStatus,
+        [userId]: undefined
+      }
+    }));
+  },
+
+  // 处理用户发布流事件
+  handleUserPublishStream: (e: { userId: string; mediaType: MediaType }) => {
+    const { userId, mediaType } = e;
+    logger.info(`用户开始发布流: ${userId}, 媒体类型: ${mediaType}`);
+  },
+
+  // 处理用户取消发布流事件
+  handleUserUnpublishStream: (e: { userId: string; mediaType: MediaType; reason: StreamRemoveReason }) => {
+    const { userId, mediaType, reason } = e;
+    logger.info(`用户停止发布流: ${userId}, 媒体类型: ${mediaType}, 原因: ${reason}`);
+  },
+
+  // 处理本地音频属性报告事件
+  handleLocalAudioPropertiesReport: (e: LocalAudioPropertiesInfo[]) => {
+    const localAudioInfo = e.find((audioInfo) => audioInfo.streamIndex === StreamIndex.STREAM_INDEX_MAIN);
+
+    if (localAudioInfo) {
+      const audioLevel = localAudioInfo.audioPropertiesInfo.linearVolume;
+      set({ audioLevel });
+
+      // 如果音量超过阈值且正在录音，表示用户在说话
+      if (audioLevel > 0.1 && get().isRecording) {
+        set({ callState: CallState.SPEAKING });
+      }
+    }
+  },
+
+  // 处理远端音频属性报告事件
+  handleRemoteAudioPropertiesReport: (e: RemoteAudioPropertiesInfo[]) => {
+    const remoteAudioInfo = e.filter((audioInfo) => audioInfo.streamKey.streamIndex === StreamIndex.STREAM_INDEX_MAIN);
+
+    // 处理远端音频音量信息
+    remoteAudioInfo.forEach((audioInfo) => {
+      const { userId } = audioInfo.streamKey;
+      const audioLevel = audioInfo.audioPropertiesInfo.linearVolume;
+
+      if (audioLevel > 0.1 && userId.includes("ai")) {
+        set({ callState: CallState.LISTENING });
+      }
+    });
+  },
+
+  // 处理音频设备状态变化事件
+  handleAudioDeviceStateChanged: async (device: DeviceInfo) => {
+    logger.info("音频设备状态变化:", device);
+
+    if (device.mediaDeviceInfo.kind === "audioinput") {
+      // 可以在这里处理音频输入设备变化
+      toast.info(`音频输入设备状态变化: ${device.mediaDeviceInfo.label}`);
+    }
+  },
+
+  // 处理自动播放失败事件
+  handleAutoPlayFail: (event: AutoPlayFailedEvent) => {
+    logger.error("自动播放失败:", event);
+    toast.error("音频自动播放失败，请手动播放");
+  },
+
+  // 处理播放器事件
+  handlePlayerEvent: (event: PlayerEvent) => {
+    logger.info("播放器事件:", event);
+  },
+
+  // 处理用户开始音频采集事件
+  handleUserStartAudioCapture: (e: { userId: string }) => {
+    const userId = e.userId;
+    logger.info(`用户开始音频采集: ${userId}`);
+    
+    if (userId.includes("ai")) {
+      set({ callState: CallState.LISTENING });
+    }
+  },
+
+  // 处理用户停止音频采集事件
+  handleUserStopAudioCapture: (e: { userId: string }) => {
+    const userId = e.userId;
+    logger.info(`用户停止音频采集: ${userId}`);
+    
+    if (userId.includes("ai")) {
+      set({ callState: CallState.CONNECTED });
+    }
+  },
+
+  // 处理网络质量事件
+  handleNetworkQuality: (uplinkNetworkQuality: NetworkQuality, downlinkNetworkQuality: NetworkQuality) => {
+    const averageQuality = Math.floor((uplinkNetworkQuality + downlinkNetworkQuality) / 2);
+    logger.debug(`网络质量更新: ${averageQuality}`);
+
+    if (averageQuality === NetworkQuality.BAD) {
+      toast.warning("网络质量较差，可能影响通话质量");
+    }
+  },
+
+  // 处理房间二进制消息事件
+  handleRoomBinaryMessageReceived: (event: { userId: string; message: ArrayBuffer }) => {
+    logger.info("收到房间二进制消息:", { userId: event.userId, size: event.message.byteLength });
+
+    try {
+      // 解析二进制消息为字幕数据
+      if (event.message && event.message instanceof ArrayBuffer) {
+        // 调用字幕处理方法
+        get().processSubtitleMessage(new Uint8Array(event.message));
+        logger.info("成功处理字幕消息");
+      } else {
+        logger.warn("二进制消息格式不正确, 期望 ArrayBuffer");
+      }
+    } catch (error) {
+      logger.error("处理房间二进制消息失败:", error);
+      toast.error("字幕处理失败");
     }
   },
   
@@ -227,6 +447,55 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
         callState: CallState.ERROR,
         error: error as Error
       });
+    }
+  },
+  
+  // 开始录音
+  startRecording: async () => {
+    try {
+      // 开始录音（其实就是开始音频采集）
+      await rtcClient.startAudioCapture();
+      
+      set({ 
+        isRecording: true,
+        audioStatus: rtcClient.getAudioStatus(),
+      });
+      
+      logger.info('开始录音（音频采集）');
+    } catch (error) {
+      logger.error('开始录音失败', error);
+      set({ error: error as Error });
+    }
+  },
+  
+  // 停止录音
+  stopRecording: async () => {
+    try {
+      // 停止录音（其实就是停止音频采集）
+      await rtcClient.stopAudioCapture();
+      
+      set({ 
+        isRecording: false,
+        audioStatus: rtcClient.getAudioStatus(),
+      });
+      
+      logger.info('停止录音（音频采集）');
+    } catch (error) {
+      logger.error('停止录音失败', error);
+      set({ error: error as Error });
+    }
+  },
+  
+  // 切换设备
+  switchDevice: async (deviceId: string) => {
+    try {
+      // 使用 rtcClient 的设备切换方法
+      await rtcClient.switchAudioDevice(deviceId);
+      
+      logger.info(`切换音频输入设备到: ${deviceId}`);
+    } catch (error) {
+      logger.error('切换设备失败', error);
+      set({ error: error as Error });
     }
   },
   
@@ -376,7 +645,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   // 启动智能体
   startAgent: async () => {
     try {
-      const { selectedPersona, rtcAppId, rtcRoomId } = get();
+      const { selectedPersona, rtcAppId, rtcRoomId, userId } = get();
       
       if (!selectedPersona) {
         throw new Error('No persona selected');
@@ -389,7 +658,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
         appId: rtcAppId,
         roomId: rtcRoomId,
         personaId: selectedPersona.id,
-        userId: process.env.NEXT_PUBLIC_RTC_USER_ID || 'User123',
+        userId: userId,
       });
 
       if (!result.success) {
@@ -476,4 +745,5 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
 // 初始化语音对话
 export const initializeVoiceChat = async () => {
   await useVoiceChatStore.getState().initializeServices();
+  await useVoiceChatStore.getState().initializeRTCListeners();
 };

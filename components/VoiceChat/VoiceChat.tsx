@@ -40,7 +40,13 @@ export function VoiceChat() {
     realtimeSubtitles,
     taskId,
     isAgentActive,
-    initializeServices
+    initializeServices,
+    listeners,
+    audioLevel,
+    isConnected,
+    startRecording,
+    stopRecording,
+    switchDevice,
   } = useVoiceChatStore()
 
   // 使用 useVoiceChat hook
@@ -117,7 +123,6 @@ export function VoiceChat() {
       if (callState !== CallState.IDLE) {
         logger.info("页面刷新前，关闭活跃的语音对话")
         try {
-          await stopRecording()
           await disconnectCall()
         } catch (error) {
           logger.error("页面刷新前关闭语音对话失败", error)
@@ -131,13 +136,12 @@ export function VoiceChat() {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
     }
-  }, [callState, stopRecording, disconnectCall])
+  }, [callState, disconnectCall])
 
   // 处理开始通话
   const handleCallStart = async () => {
     try {
       await connectCall()
-      await startRecording()
       logger.info("通话开始成功")
     } catch (error) {
       logger.error("Failed to start call", error)
@@ -148,7 +152,6 @@ export function VoiceChat() {
   // 处理结束通话
   const handleCallEnd = async () => {
     try {
-      await stopRecording()
       await disconnectCall()
       setDuration(0)
     } catch (error) {

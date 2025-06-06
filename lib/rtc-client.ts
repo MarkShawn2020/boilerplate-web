@@ -84,6 +84,8 @@ export class RTCClient {
         throw new Error("RTC Engine not initialized")
       }
 
+      logger.info(`listener(room) count: ${this.engine.listenerCount(VERTC.events.onRoomBinaryMessageReceived)}`)
+
       this.config = config
       this.audioStatus.isProcessing = true
 
