@@ -121,7 +121,30 @@ export function VoiceChat() {
       // 组件卸载时的清理逻辑
     }
   }, []) // 依赖数组为空，只在挂载时运行一次
-  
+
+  // 页面刷新前清理语音连接
+  useEffect(() => {
+    const handleBeforeUnload = async () => {
+      // 如果当前有活跃的语音对话，先关闭
+      if (callState !== CallState.IDLE) {
+        logger.info("页面刷新前，关闭活跃的语音对话")
+        try {
+          await stopRecording()
+          await disconnectCall()
+        } catch (error) {
+          logger.error("页面刷新前关闭语音对话失败", error)
+        }
+      }
+    }
+
+    // 添加页面刷新前的事件监听
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [callState, stopRecording, disconnectCall])
+
   // 处理开始通话
   const handleCallStart = async () => {
     try {
