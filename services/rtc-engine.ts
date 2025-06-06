@@ -56,6 +56,13 @@ export class RTCEngineService {
   }
 
   /**
+   * 检查 RTC Engine 是否已初始化
+   */
+  public isInitialized(): boolean {
+    return this.engine !== null;
+  }
+
+  /**
    * 加入房间
    */
   public async joinRoom(config: RTCConfig): Promise<void> {
@@ -421,7 +428,7 @@ export class RTCEngineService {
       this.engine.on(VERTC.events.onRoomBinaryMessageReceived, listeners.handleRoomBinaryMessageReceived);
     }
 
-    logger.info('External event listeners registered');
+    logger.info('[RTCEngineService] External event listeners registered');
   }
 
   /**

@@ -59,6 +59,7 @@ export const useVoiceChat = (): {
     messages,
     sendMessage,
     processSubtitleMessage,
+    isServicesInitialized
   } = useVoiceChatStore();
 
   // 本地状态管理
@@ -304,8 +305,14 @@ export const useVoiceChat = (): {
     }
   }, []);
 
-  // 注册事件监听器
+  // 注册事件监听器 - 需要等待 RTC Engine 初始化完成
   useEffect(() => {
+    // 检查服务是否已初始化
+    if (!isServicesInitialized) {
+      logger.debug('服务尚未初始化，跳过事件监听器注册');
+      return;
+    }
+
     const listeners = {
       handleError,
       handleUserJoin,
@@ -325,10 +332,12 @@ export const useVoiceChat = (): {
 
     // 注册所有事件监听器
     rtcEngineService.registerEventListeners(listeners);
+    logger.info('[useVoiceChat] External event listeners registered');
 
     return () => {
       // 清理事件监听器
       rtcEngineService.unregisterEventListeners();
+      logger.info('[useVoiceChat] External event listeners unregistered');
     };
   }, [
     handleError,
@@ -345,6 +354,7 @@ export const useVoiceChat = (): {
     handleUserStopAudioCapture,
     handleNetworkQuality,
     handleRoomBinaryMessageReceived,
+    isServicesInitialized
   ]);
 
   return {

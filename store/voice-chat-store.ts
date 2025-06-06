@@ -79,6 +79,9 @@ export interface VoiceChatState {
   // 音频状态
   isMuted: boolean;
   
+  // 服务初始化状态
+  isServicesInitialized: boolean;
+  
   // Actions
   initializeServices: () => Promise<void>;
   setSelectedPersona: (persona: Persona) => void;
@@ -124,6 +127,8 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   
   isMuted: false,
   
+  isServicesInitialized: false,
+  
   // 初始化服务
   initializeServices: async () => {
     try {
@@ -145,6 +150,8 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       rtcEngineService.initialize(rtcAppId);
       
       logger.info('Voice chat services initialized');
+      
+      set({ isServicesInitialized: true });
     } catch (error) {
       logger.error('Failed to initialize services', error);
       set({ error: error as Error });
@@ -459,6 +466,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       isMuted: false,
       taskId: null,
       isAgentActive: false,
+      isServicesInitialized: false,
     });
     
     logger.info('Voice chat state reset');
