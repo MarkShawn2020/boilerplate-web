@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { logger } from '../services/logger';
+import { logger } from '../lib/logger';
 
 // 音频设备接口
 export interface AudioDevice {

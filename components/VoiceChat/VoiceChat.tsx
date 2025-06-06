@@ -16,7 +16,7 @@ import { useMicrophone } from "../../hooks/useMicrophone"
 import { useVoiceChat } from "../../hooks/useVoiceChat"
 
 // 服务和状态管理导入
-import { logger } from "../../services/logger"
+import { logger } from "../../lib/logger"
 import { useVoiceChatStore, CallState, Persona } from "../../store/voice-chat-store"
 
 
@@ -176,16 +176,6 @@ export function VoiceChat() {
     }
     logger.info(`Selected persona: ${persona.name}`)
   }
-
-  logger.info("当前状态:", {
-    callState,
-    isMuted,
-    error,
-    duration,
-    messages,
-    audioLevel,
-    isConnected,
-  })
 
   return (
     <div className="h-full bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col w-full xs:max-w-md relative">

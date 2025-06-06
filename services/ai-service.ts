@@ -1,4 +1,4 @@
-import { logger } from './logger';
+import { logger } from '../lib/logger';
 
 /**
  * 豆包 AI 消息类型

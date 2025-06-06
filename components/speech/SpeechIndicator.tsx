@@ -3,7 +3,7 @@
 import React from 'react';
 import { useVoiceChatStore, CallState } from '../../store/voice-chat-store';
 import { cn } from '../../lib/utils';
-import { logger } from '../../services/logger';
+import { logger } from '../../lib/logger';
 
 // 音量波形动画组件
 const AudioWaveform = ({ 

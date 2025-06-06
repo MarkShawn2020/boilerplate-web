@@ -1,6 +1,6 @@
 'use server';
 
-import { logger } from '@/services/logger';
+import { logger } from '@/lib/logger';
 import { Signer } from '@volcengine/openapi';
 
 const CONVERSATION_SIGNATURE = 'conversation';
@@ -123,40 +123,39 @@ export async function startVoiceChatAction(request: StartVoiceChatRequest): Prom
     logger.info('Server Action: 启动智能体', request);
 
     // 生成唯一任务ID
-    const taskId = process.env.NEXT_PUBLIC_RTC_USER_ID || `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const taskId = request.userId || process.env.NEXT_PUBLIC_RTC_USER_ID || `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     // 构造 StartVoiceChat API 请求参数
     const apiParams = {
-      AppId: process.env.NEXT_PUBLIC_RTC_APP_ID || request.appId,
-      RoomId: process.env.NEXT_PUBLIC_RTC_ROOM_ID || request.roomId,
+      AppId: request.appId,
+      RoomId: request.roomId,
       TaskId: taskId,
       Config: {
+        ASRConfig: {
+          Provider: 'volcano' as const,
+          ProviderParams: {
+            Mode: 'bigmodel',
+            AppId: request.appId,
+            AccessToken: process.env.NEXT_PUBLIC_ASR_ACCESS_TOKEN || '',
+          },
+        },
         LLMConfig: {
           Mode: 'ArkV3',
-          EndPointId: process.env.ARK_ENDPOINT_ID || 'ep-20250603102226-lbgst',
+          EndPointId: process.env.ARK_ENDPOINT_ID || 'ep-20250602150324-wxxsm',
           MaxTokens: 1024,
           Temperature: 0.1,
           TopP: 0.3,
           SystemMessages: [`你是一个智能语音助手，名字是${request.personaId}。请用自然、友好的语调与用户对话。`],
           Prefill: true,
-          ModelName: process.env.DOUBAO_MODEL || 'doubao-lite-4k',
           ModelVersion: '1.0',
           WelcomeSpeech: `你好，我是${request.personaId}，很高兴与你对话！`,
           Feature: JSON.stringify({ Http: true }),
-        },
-        ASRConfig: {
-          Provider: 'volcano' as const,
-          ProviderParams: {
-            Mode: 'bigmodel',
-            AppId: process.env.NEXT_PUBLIC_ASR_APP_ID || '',
-            AccessToken: process.env.NEXT_PUBLIC_ASR_ACCESS_TOKEN || '',
-          },
         },
         TTSConfig: {
           Provider: 'volcano' as const,
           ProviderParams: {
             app: {
-              AppId: process.env.NEXT_PUBLIC_TTS_APP_ID || '',
+              AppId: request.appId,
               Cluster: process.env.NEXT_PUBLIC_TTS_CLUSTER || 'volcano_tts',
               ...(process.env.NEXT_PUBLIC_TTS_ACCESS_TOKEN && { Token: process.env.NEXT_PUBLIC_TTS_ACCESS_TOKEN }),
             },

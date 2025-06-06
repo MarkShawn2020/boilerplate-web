@@ -1,13 +1,13 @@
 "use client";
 
 import { create } from 'zustand';
-import { rtcEngineService, AudioStatus } from '../services/rtc-engine';
+import { rtcClient, AudioStatus } from '../lib/rtc-client';
 import { aiService, AIMessage } from '../services/ai-service';
 import { defaultPersonas } from 'data/personas';
 import { env } from '../env.mjs';
 import { RealtimeSubtitle, SubtitleParser } from '../lib/subtitle-parser';
 import type { SubtitleData } from '../lib/subtitle-parser';
-import { logger } from '../services/logger';
+import { logger } from '../lib/logger';
 import { startVoiceChatAction, stopVoiceChatAction } from '../app/actions/voice-chat-actions';
 
 // 人设接口
@@ -147,7 +147,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       }
       
       // 初始化 RTC 引擎
-      rtcEngineService.initialize(rtcAppId);
+      await rtcClient.initialize(rtcAppId);
       
       logger.info('Voice chat services initialized');
       
@@ -167,7 +167,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   // 连接通话
   connectCall: async () => {
     try {
-      const { rtcToken, rtcRoomId, userId, selectedPersona } = get();
+      const { rtcToken, rtcRoomId, userId, selectedPersona, rtcAppId, startAgent } = get();
       
       if (!selectedPersona) {
         throw new Error('No persona selected');
@@ -177,8 +177,8 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       set({ callState: CallState.CONNECTING });
       
       // 加入 RTC 房间
-      await rtcEngineService.joinRoom({
-        appId: get().rtcAppId,
+      await rtcClient.joinRoom({
+        appId: rtcAppId,
         roomId: rtcRoomId,
         userId: userId,
         token: rtcToken,
@@ -188,10 +188,10 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       });
       
       // 开始音频采集
-      await rtcEngineService.startAudioCapture();
+      await rtcClient.startAudioCapture();
       
       // 启动智能体
-      await get().startAgent();
+      await startAgent();
 
       logger.info('Connected to voice call');
     } catch (error) {
@@ -212,12 +212,12 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       await get().stopAgent();
       
       // 离开 RTC 房间
-      await rtcEngineService.leaveRoom();
+      await rtcClient.leaveRoom();
       
       // 更新状态
       set({
         callState: CallState.IDLE,
-        audioStatus: rtcEngineService.getAudioStatus(),
+        audioStatus: rtcClient.getAudioStatus(),
       });
       
       logger.info('Disconnected from voice call');
@@ -236,14 +236,14 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       const newIsMuted = !get().isMuted;
       
       if (newIsMuted) {
-        await rtcEngineService.stopAudioCapture();
+        await rtcClient.stopAudioCapture();
       } else {
-        await rtcEngineService.startAudioCapture();
+        await rtcClient.startAudioCapture();
       }
       
       set({
         isMuted: newIsMuted,
-        audioStatus: rtcEngineService.getAudioStatus(),
+        audioStatus: rtcClient.getAudioStatus(),
       });
       
       logger.info(`Microphone ${newIsMuted ? 'muted' : 'unmuted'}`);
@@ -446,7 +446,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
     if (get().callState === CallState.CONNECTED || 
         get().callState === CallState.SPEAKING || 
         get().callState === CallState.LISTENING) {
-      rtcEngineService.leaveRoom().catch(err => {
+      rtcClient.leaveRoom().catch(err => {
         logger.error('Error during reset/disconnect', err);
       });
     }

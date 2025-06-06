@@ -1,4 +1,4 @@
-import { logger } from '../services/logger';
+import { logger } from '../lib/logger';
 
 /**
  * 字幕数据结构

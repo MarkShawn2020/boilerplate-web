@@ -3,7 +3,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useVoiceChatStore, CallState } from '../../store/voice-chat-store';
 import { cn } from '../../lib/utils';
-import { logger } from '../../services/logger';
+import { logger } from '../../lib/logger';
 import Image from 'next/image';
 
 // 消息气泡组件

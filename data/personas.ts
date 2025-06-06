@@ -1,5 +1,5 @@
 import { Persona } from "../store/voice-chat-store";
-import { logger } from "../services/logger";
+import { logger } from "../lib/logger";
 
 /**
  * 默认人设数据
