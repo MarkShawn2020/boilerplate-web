@@ -333,20 +333,12 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   handleUserStartAudioCapture: (e: { userId: string }) => {
     const userId = e.userId;
     logger.info(`用户开始音频采集: ${userId}`);
-    
-    if (userId.includes("ai")) {
-      set({ callState: CallState.LISTENING });
-    }
   },
 
   // 处理用户停止音频采集事件
   handleUserStopAudioCapture: (e: { userId: string }) => {
     const userId = e.userId;
     logger.info(`用户停止音频采集: ${userId}`);
-    
-    if (userId.includes("ai")) {
-      set({ callState: CallState.CONNECTED });
-    }
   },
 
   // 处理网络质量事件
@@ -412,6 +404,8 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       
       // 启动智能体
       await startAgent();
+
+      set({ callState: CallState.CONNECTED });
 
       logger.info('Connected to voice call');
     } catch (error) {
