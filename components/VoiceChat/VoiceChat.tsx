@@ -59,9 +59,6 @@ export function VoiceChat() {
     isRecording: micIsRecording,
   } = useMicrophone();
 
-  // 语音状态管理
-  const [isSpeaking, setIsSpeaking] = useState(false);
-
   // 每秒更新通话时间
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -84,15 +81,6 @@ export function VoiceChat() {
     const secs = seconds % 60;
     return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
-  
-  // 模拟语音状态变化
-  useEffect(() => {
-    if (callState === CallState.SPEAKING) {
-      setIsSpeaking(true);
-    } else {
-      setIsSpeaking(false);
-    }
-  }, [callState]);
 
   // 单独处理人设初始化
   useEffect(() => {
@@ -268,7 +256,7 @@ export function VoiceChat() {
             <Avatar
               persona={selectedPersona}
               size="large"
-              isActive={callState === CallState.SPEAKING || isSpeaking}
+              isActive={callState === CallState.SPEAKING}
             />
             
             <div className="space-y-2">
@@ -285,7 +273,7 @@ export function VoiceChat() {
         {/* 语音波形动画 */}
         {isConnected && (
           <div className="space-y-4">
-            <WaveAnimation isActive={isSpeaking || callState === CallState.SPEAKING} />
+            <WaveAnimation isActive={callState === CallState.SPEAKING} />
             <VolumeVisualizer level={audioLevel} />
           </div>
         )}

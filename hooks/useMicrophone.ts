@@ -92,7 +92,7 @@ export const useMicrophone = () => {
         }));
 
       setState(prev => ({ ...prev, devices: audioDevices }));
-      logger.info(`Found ${audioDevices.length} audio input devices`);
+      logger.info(`Found ${audioDevices.length} audio input devices: `, audioDevices);
       return audioDevices;
     } catch (error) {
       logger.error('Failed to get audio devices', error);
@@ -371,27 +371,42 @@ export const useMicrophone = () => {
     logger.info('Switch device requested', { deviceId });
     
     try {
-      // 先更新选中的设备
-      let targetDevice: AudioDevice | undefined;
-      
-      setState(prev => {
-        targetDevice = prev.devices.find(device => device.deviceId === deviceId);
-        if (!targetDevice) {
-          logger.warn('Target device not found', { deviceId, availableDevices: prev.devices });
-          return prev;
-        }
-
-        logger.info('Updating selected device', { 
-          from: prev.selectedDevice?.label, 
-          to: targetDevice.label 
-        });
-        
-        return { ...prev, selectedDevice: targetDevice, error: null };
-      });
-
-      if (!targetDevice) {
-        throw new Error(`Device with id ${deviceId} not found`);
+      // 先检查设备列表是否为空，如果为空则先获取设备
+      if (state.devices.length === 0) {
+        logger.info('Device list is empty, refreshing...');
+        await getDevices();
       }
+      
+      // 在当前状态中查找目标设备
+      let targetDevice = state.devices.find(device => device.deviceId === deviceId);
+      
+      // 如果没找到设备，尝试刷新设备列表再查找一次
+      if (!targetDevice) {
+        logger.info('Device not found in current list, refreshing device list...');
+        const refreshedDevices = await getDevices();
+        targetDevice = refreshedDevices.find(device => device.deviceId === deviceId);
+      }
+      
+      if (!targetDevice) {
+        const availableDevices = state.devices.map(d => ({ id: d.deviceId, label: d.label }));
+        logger.warn('Target device not found after refresh', { 
+          deviceId, 
+          availableDevices
+        });
+        throw new Error(`Device with id ${deviceId} not found. Available devices: ${availableDevices.map(d => d.label).join(', ')}`);
+      }
+
+      logger.info('Updating selected device', { 
+        from: state.selectedDevice?.label, 
+        to: targetDevice.label 
+      });
+      
+      // 更新选中的设备
+      setState(prev => ({ 
+        ...prev, 
+        selectedDevice: targetDevice, 
+        error: null 
+      }));
 
       // 如果当前在录音，需要重新启动录音以使用新设备
       const currentState = state;
@@ -418,7 +433,7 @@ export const useMicrophone = () => {
       }));
       throw error; // 重新抛出错误以便上层处理
     }
-  }, [stopRecording, startRecording, state]);
+  }, [stopRecording, startRecording, state, getDevices]);
 
   // 初始化
   useEffect(() => {
