@@ -48,14 +48,14 @@ export class RTCClient {
 
       this.engine = VERTC.createEngine(appId)
 
-      try {
-        const AIAnsExtension = new RTCAIAnsExtension()
-        await this.engine.registerExtension(AIAnsExtension)
-        AIAnsExtension.enable()
-        logger.info("AI 降噪已启用")
-      } catch (error) {
-        logger.warn(`当前环境不支持 AI 降噪, 此错误可忽略, 不影响实际使用, e: ${(error as any).message}`)
-      }
+      // try {
+      //   const AIAnsExtension = new RTCAIAnsExtension()
+      //   await this.engine.registerExtension(AIAnsExtension)
+      //   AIAnsExtension.enable()
+      //   logger.info("AI 降噪已启用")
+      // } catch (error) {
+      //   logger.warn(`当前环境不支持 AI 降噪, 此错误可忽略, 不影响实际使用, e: ${(error as any).message}`)
+      // }
 
       logger.info("RTC Engine initialized successfully")
     } catch (error) {
@@ -77,7 +77,7 @@ export class RTCClient {
         throw new Error("RTC Engine not initialized")
       }
 
-      logger.info(`listener(room) count: ${this.engine.listenerCount(VERTC.events.onRoomBinaryMessageReceived)}`)
+      this.engine.enableAudioPropertiesReport({ interval: 1000 });
 
       this.config = config
       this.audioStatus.isProcessing = true
@@ -87,12 +87,17 @@ export class RTCClient {
         config.roomId,
         {
           userId: config.userId,
+          extraInfo: JSON.stringify({
+            call_scene: 'RTC-AIGC',
+            user_name: config.userId,
+            user_id: config.userId,
+          }),
         },
         {
           isAutoPublish: config.isAutoPublish ?? true,
           isAutoSubscribeAudio: config.isAutoSubscribeAudio ?? true,
           isAutoSubscribeVideo: config.isAutoSubscribeVideo ?? false,
-          roomProfileType: RoomProfileType.communication,
+          roomProfileType: RoomProfileType.chat,
         }
       )
 
@@ -134,6 +139,8 @@ export class RTCClient {
 
       this.audioStatus.isProcessing = true
       await this.engine.leaveRoom()
+
+      this.unregisterEventListeners()
 
       await this.engine.stopAudioCapture()
       logger.info("Stopped audio capture")

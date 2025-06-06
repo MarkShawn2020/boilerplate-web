@@ -21,8 +21,8 @@ import { env } from "../env.mjs"
 import { logger } from "../lib/logger"
 import { AudioStatus, rtcClient } from "../lib/rtc-client"
 import type { SubtitleData } from "../lib/subtitle-parser"
-import { RealtimeSubtitle, SubtitleParser } from "../lib/subtitle-parser"
-import { AIMessage, aiService } from "../services/ai-service"
+import { SubtitleParser } from "../lib/subtitle-parser"
+import { AIMessage } from "../services/ai-service"
 
 // 人设接口
 export interface Persona {
@@ -99,8 +99,6 @@ export interface VoiceChatState {
 
   // === 初始化方法 ===
   initializeServices: () => Promise<void>
-  initializeRTCListeners: () => void
-  cleanupRTCListeners: () => void
 
   // === RTC 事件处理方法 ===
   handleError: (e: { errorCode: typeof VERTC.ErrorCode }) => void
@@ -123,7 +121,6 @@ export interface VoiceChatState {
   connectCall: () => Promise<void>
   disconnectCall: () => Promise<void>
   switchDevice: (deviceId: string) => Promise<void>
-  sendMessage: (content: string) => Promise<void>
   processSubtitleMessage: (message: Uint8Array) => void
   addChatMessage: (message: Omit<ChatMessage, "id" | "timestamp">) => void
   updateRealtimeSubtitle: (userId: string, subtitle: RealtimeSubtitle) => void
@@ -173,7 +170,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       // 调试环境变量
       logger.info("Environment variables:", {
         rtcAppId: env.NEXT_PUBLIC_RTC_APP_ID,
-        rtcToken: env.NEXT_PUBLIC_RTC_TOKEN ? "SET" : "NOT_SET",
+        rtcToken: env.NEXT_PUBLIC_RTC_TOKEN, 
         rtcRoomId: env.NEXT_PUBLIC_RTC_ROOM_ID,
         userId: env.NEXT_PUBLIC_RTC_USER_ID,
       })
@@ -194,45 +191,11 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
     }
   },
 
-  // 初始化 RTC 事件监听
-  initializeRTCListeners: () => {
-    const listeners = {
-      handleError: get().handleError,
-      handleUserJoin: get().handleUserJoin,
-      handleUserLeave: get().handleUserLeave,
-      handleUserPublishStream: get().handleUserPublishStream,
-      handleUserUnpublishStream: get().handleUserUnpublishStream,
-      handleLocalAudioPropertiesReport: get().handleLocalAudioPropertiesReport,
-      handleRemoteAudioPropertiesReport: get().handleRemoteAudioPropertiesReport,
-      handleAudioDeviceStateChanged: get().handleAudioDeviceStateChanged,
-      handleAutoPlayFail: get().handleAutoPlayFail,
-      handlePlayerEvent: get().handlePlayerEvent,
-      handleUserStartAudioCapture: get().handleUserStartAudioCapture,
-      handleUserStopAudioCapture: get().handleUserStopAudioCapture,
-      handleNetworkQuality: get().handleNetworkQuality,
-      handleRoomBinaryMessageReceived: get().handleRoomBinaryMessageReceived,
-    }
-
-    rtcClient.registerEventListeners(listeners)
-    logger.info("RTC 事件监听器已注册")
-  },
-
-  // 清理 RTC 事件监听
-  cleanupRTCListeners: () => {
-    rtcClient.unregisterEventListeners()
-    logger.info("RTC 事件监听器已清理")
-  },
-
   // 处理 RTC 错误事件
   handleError: (e: { errorCode: typeof VERTC.ErrorCode }) => {
     const { errorCode } = e
     logger.error("RTC 错误:", errorCode)
-
-    if (errorCode === VERTC.ErrorCode.DUPLICATE_LOGIN) {
-      toast.error("重复登录，已被踢出房间")
-    } else {
-      toast.error(`RTC 连接错误: ${errorCode}`)
-    }
+    toast.error(`RTC 连接错误: ${errorCode}`)
 
     set({
       callState: CallState.ERROR,
@@ -252,14 +215,6 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   handleUserLeave: (e: onUserLeaveEvent) => {
     const userId = e.userInfo.userId
     logger.info(`用户离开房间: ${userId}`)
-
-    // 清理播放状态
-    set((state) => ({
-      playStatus: {
-        ...state.playStatus,
-        [userId]: undefined,
-      },
-    }))
   },
 
   // 处理用户发布流事件
@@ -387,6 +342,26 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       // 启动智能体
       await startAgent()
 
+      const listeners = {
+        handleError: get().handleError,
+        handleUserJoin: get().handleUserJoin,
+        handleUserLeave: get().handleUserLeave,
+        handleUserPublishStream: get().handleUserPublishStream,
+        handleUserUnpublishStream: get().handleUserUnpublishStream,
+        handleLocalAudioPropertiesReport: get().handleLocalAudioPropertiesReport,
+        handleRemoteAudioPropertiesReport: get().handleRemoteAudioPropertiesReport,
+        handleAudioDeviceStateChanged: get().handleAudioDeviceStateChanged,
+        handleAutoPlayFail: get().handleAutoPlayFail,
+        handlePlayerEvent: get().handlePlayerEvent,
+        handleUserStartAudioCapture: get().handleUserStartAudioCapture,
+        handleUserStopAudioCapture: get().handleUserStopAudioCapture,
+        handleNetworkQuality: get().handleNetworkQuality,
+        handleRoomBinaryMessageReceived: get().handleRoomBinaryMessageReceived,
+      }
+
+      rtcClient.registerEventListeners(listeners)
+      logger.info("RTC 事件监听器已注册")
+
       // 加入 RTC 房间
       await rtcClient.connect({
         appId: rtcAppId,
@@ -414,7 +389,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   disconnectCall: async () => {
     try {
       set({ callState: CallState.DISCONNECTING })
-
+      
       // 离开 RTC 房间
       await rtcClient.disconnect()
 
@@ -424,7 +399,6 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       // 更新状态
       set({
         callState: CallState.IDLE,
-        audioStatus: rtcClient.getAudioStatus(),
       })
 
       logger.info("Disconnected from voice call")
@@ -448,43 +422,6 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
     //   logger.error('切换设备失败', error);
     //   set({ error: error as Error });
     // }
-  },
-
-  // 发送消息
-  sendMessage: async (content: string) => {
-    try {
-      const { messages, selectedPersona } = get()
-      const userMessage: ChatMessage = { role: "user", content }
-
-      // 添加用户消息到对话历史
-      set({
-        messages: [...messages, userMessage],
-        callState: CallState.THINKING,
-      })
-
-      // 准备发送到豆包 AI
-      const conversation = [...messages, userMessage]
-
-      // 调用 AI 服务获取回复
-      const response = await aiService.sendConversation({
-        messages: conversation,
-        personaId: selectedPersona?.id,
-      })
-
-      // 添加 AI 回复到对话历史
-      set({
-        messages: [...get().messages, response.message],
-        callState: CallState.CONNECTED,
-      })
-
-      logger.info("Received AI response")
-    } catch (error) {
-      logger.error("Failed to send message", error)
-      set({
-        callState: CallState.ERROR,
-        error: error as Error,
-      })
-    }
   },
 
   // 处理字幕消息
@@ -644,9 +581,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       get().callState === CallState.SPEAKING ||
       get().callState === CallState.LISTENING
     ) {
-      rtcClient.disconnect().catch((err) => {
-        logger.error("Error during reset/disconnect", err)
-      })
+      rtcClient.disconnect()
     }
 
     // 重置到初始状态
@@ -670,9 +605,3 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
     logger.info("Voice chat state reset")
   },
 }))
-
-// 初始化语音对话
-export const initializeVoiceChat = async () => {
-  await useVoiceChatStore.getState().initializeServices()
-  await useVoiceChatStore.getState().initializeRTCListeners()
-}

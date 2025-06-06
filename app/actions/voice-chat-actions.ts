@@ -68,7 +68,7 @@ async function callVolcEngineAPI(
     const signer = new Signer(openApiRequestData, 'rtc');
     signer.addAuthorization(ACCOUNT_INFO);
 
-    logger.info('发起火山引擎 OpenAPI 请求', {
+    logger.debug('发起火山引擎 OpenAPI 请求', {
       action,
       version,
       url: `https://rtc.volcengineapi.com?Action=${action}&Version=${version}`,
