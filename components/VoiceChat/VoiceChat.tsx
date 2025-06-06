@@ -46,10 +46,6 @@ export function VoiceChat() {
     audioLevel,
     isRecording,
     isMuted,
-    // 控制方法
-    startRecording,
-    stopRecording,
-    switchDevice,
     connectCall,
     disconnectCall,
     toggleMute,

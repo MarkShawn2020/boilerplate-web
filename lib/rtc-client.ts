@@ -65,16 +65,9 @@ export class RTCClient {
   }
 
   /**
-   * 检查 RTC Engine 是否已初始化
-   */
-  public isInitialized(): boolean {
-    return this.engine !== null
-  }
-
-  /**
    * 加入房间
    */
-  public async joinRoom(config: RTCConfig): Promise<void> {
+  public async connect(config: RTCConfig): Promise<void> {
     logger.info("准备加入房间", {
       config,
     })
@@ -103,6 +96,22 @@ export class RTCClient {
         }
       )
 
+      if (this.audioStatus.isMicrophoneOn) {
+        logger.warn("[RTCClient] Microphone is already on")
+      }
+
+      await this.engine.startAudioCapture()
+
+      // 如果设置不自动发布，则需要手动发布
+      if (this.config && this.config.isAutoPublish) {
+        logger.info("[RTCClient] Auto publishing audio stream")
+      }
+
+      await this.engine.publishStream(MediaType.AUDIO)
+
+      this.audioStatus.isMicrophoneOn = true
+      logger.info("[RTCClient] DONE Started audio capture")
+
       this.audioStatus.isConnected = true
       this.audioStatus.isProcessing = false
       logger.info(`Joined room: ${config.roomId}`)
@@ -117,15 +126,17 @@ export class RTCClient {
   /**
    * 离开房间
    */
-  public async leaveRoom(): Promise<void> {
+  public async disconnect(): Promise<void> {
     try {
       if (!this.engine) {
         throw new Error("RTC Engine not initialized")
       }
 
       this.audioStatus.isProcessing = true
-      await this.stopAudioCapture()
       await this.engine.leaveRoom()
+
+      await this.engine.stopAudioCapture()
+      logger.info("Stopped audio capture")
 
       this.audioStatus = {
         isConnected: false,
@@ -139,103 +150,6 @@ export class RTCClient {
       this.audioStatus.isProcessing = false
       this.audioStatus.error = error as Error
       logger.error("Failed to leave room", error)
-      throw error
-    }
-  }
-
-  /**
-   * 开始音频采集
-   */
-  public async startAudioCapture(): Promise<void> {
-    logger.info("[RTCClient] Starting audio capture: ", { config: this.config })
-    try {
-      if (!this.engine) {
-        throw new Error("[RTCClient] RTC Engine not initialized")
-      }
-
-      if (this.audioStatus.isMicrophoneOn) {
-        logger.warn("[RTCClient] Microphone is already on")
-      }
-
-      this.engine.startAudioCapture().then(() => {
-        logger.info("[RTCClient] Started audio capture")
-      }).catch((error) => {
-        logger.error("[RTCClient] Failed to start audio capture", error)
-
-      })
-
-      // 如果设置不自动发布，则需要手动发布
-      if (this.config && this.config.isAutoPublish) {
-        logger.info("[RTCClient] Auto publishing audio stream")
-        await this.engine.publishStream(MediaType.AUDIO)
-      }
-
-      this.audioStatus.isMicrophoneOn = true
-      logger.info("[RTCClient] DONE Started audio capture")
-    } catch (error) {
-      logger.error("[RTCClient] Failed to start audio capture", error)
-      throw error
-    }
-  }
-
-  /**
-   * 停止音频采集
-   */
-  public async stopAudioCapture(): Promise<void> {
-    try {
-      if (!this.engine) {
-        throw new Error("RTC Engine not initialized")
-      }
-
-      if (!this.audioStatus.isMicrophoneOn) {
-        return
-      }
-
-      await this.engine.stopAudioCapture()
-      this.audioStatus.isMicrophoneOn = false
-      logger.info("Stopped audio capture")
-    } catch (error) {
-      logger.error("Failed to stop audio capture", error)
-      throw error
-    }
-  }
-
-  /**
-   * 静音/取消静音本地音频
-   */
-  public async toggleMicrophone(): Promise<boolean> {
-    try {
-      if (this.audioStatus.isMicrophoneOn) {
-        await this.stopAudioCapture()
-        return false
-      } else {
-        await this.startAudioCapture()
-        return true
-      }
-    } catch (error) {
-      logger.error("Failed to toggle microphone", error)
-      throw error
-    }
-  }
-
-  /**
-   * 设置远程用户视频播放器
-   */
-  public async setRemoteAudioPlayer(userId: string, domId: string): Promise<void> {
-    try {
-      if (!this.engine) {
-        throw new Error("RTC Engine not initialized")
-      }
-
-      await this.engine.setRemoteVideoPlayer(StreamIndex.STREAM_INDEX_MAIN, {
-        userId,
-        renderDom: domId,
-      })
-
-      this.audioStatus.isSpeakerOn = true
-      logger.info(`Set remote audio player for user: ${userId}`)
-    } catch (error) {
-      logger.error("Failed to set remote audio player", error)
       throw error
     }
   }
@@ -255,15 +169,6 @@ export class RTCClient {
       this.eventCallbacks[event] = []
     }
     this.eventCallbacks[event].push(callback)
-  }
-
-  /**
-   * 移除事件监听
-   */
-  public off(event: string, callback: (...args: any[]) => void): void {
-    if (this.eventCallbacks[event]) {
-      this.eventCallbacks[event] = this.eventCallbacks[event].filter((cb) => cb !== callback)
-    }
   }
 
   /**
@@ -369,22 +274,6 @@ export class RTCClient {
     logger.info("External event listeners unregistered")
   }
 
-  /**
-   * 切换音频设备
-   */
-  public async switchAudioDevice(deviceId: string): Promise<void> {
-    try {
-      if (!this.engine) {
-        throw new Error("RTC Engine not initialized")
-      }
-
-      await this.engine.setAudioCaptureDevice(deviceId)
-      logger.info(`Switched to audio device: ${deviceId}`)
-    } catch (error) {
-      logger.error("Failed to switch audio device", error)
-      throw error
-    }
-  }
 }
 
 // 导出单例实例

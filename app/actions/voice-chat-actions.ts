@@ -44,7 +44,7 @@ async function callVolcEngineAPI(
   version: string,
   body: Record<string, any>
 ): Promise<any> {
-  logger.info(`调用火山引擎 API: ${action}`, { body });
+  // logger.info(`调用火山引擎 API: ${action}`, { body });
 
   try {
     /**
