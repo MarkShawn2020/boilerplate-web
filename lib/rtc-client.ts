@@ -48,14 +48,14 @@ export class RTCClient {
 
       this.engine = VERTC.createEngine(appId)
 
-      // try {
-      //   const AIAnsExtension = new RTCAIAnsExtension()
-      //   await this.engine.registerExtension(AIAnsExtension)
-      //   AIAnsExtension.enable()
-      //   logger.info("AI 降噪已启用")
-      // } catch (error) {
-      //   logger.warn(`当前环境不支持 AI 降噪, 此错误可忽略, 不影响实际使用, e: ${(error as any).message}`)
-      // }
+      try {
+        const AIAnsExtension = new RTCAIAnsExtension()
+        await this.engine.registerExtension(AIAnsExtension)
+        AIAnsExtension.enable()
+        logger.info("AI 降噪已启用")
+      } catch (error) {
+        logger.warn(`当前环境不支持 AI 降噪, 此错误可忽略, 不影响实际使用, e: ${(error as any).message}`)
+      }
 
       logger.info("RTC Engine initialized successfully")
     } catch (error) {
@@ -151,6 +151,9 @@ export class RTCClient {
       this.unregisterEventListeners()
 
       await this.engine.stopAudioCapture()
+
+      VERTC.destroyEngine(this.engine)
+      this.engine = null
       logger.info("Stopped audio capture")
 
       this.audioStatus = {

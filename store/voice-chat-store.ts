@@ -338,8 +338,6 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       // 更新状态为连接中
       set({ callState: CallState.CONNECTING })
 
-      // 启动智能体
-      await startAgent()
 
       const listeners = {
         handleError: get().handleError,
@@ -378,6 +376,9 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
         await rtcClient.publishVoiceStream(deviceId)
       }
 
+      // 启动智能体
+      await startAgent()
+
       set({ callState: CallState.CONNECTED })
 
       logger.info("Connected to voice call")
@@ -394,12 +395,14 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   disconnectCall: async () => {
     try {
       set({ callState: CallState.DISCONNECTING })
+
+      // 停止智能体
+      await get().stopAgent()
       
       // 离开 RTC 房间
       await rtcClient.disconnect()
 
-      // 停止智能体
-      await get().stopAgent()
+
 
       // 更新状态
       set({
@@ -501,6 +504,10 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   // 启动智能体
   startAgent: async () => {
     try {
+
+      // todo: 
+      await stopVoiceChatAction({ TaskId: "User123" })
+
       const { selectedPersona, rtcAppId, rtcRoomId, userId } = get()
 
       if (!selectedPersona) {
