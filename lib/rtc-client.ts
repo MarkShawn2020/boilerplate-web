@@ -33,7 +33,7 @@ export class RTCClient {
   private eventCallbacks: Record<string, Array<(...args: any[]) => void>> = {}
 
   constructor() {
-    logger.debug("RTCEngineService created")
+    logger.debug("RTCClient created")
   }
 
   /**
@@ -57,7 +57,6 @@ export class RTCClient {
         logger.warn(`当前环境不支持 AI 降噪, 此错误可忽略, 不影响实际使用, e: ${(error as any).message}`)
       }
 
-      this.setupEventListeners()
       logger.info("RTC Engine initialized successfully")
     } catch (error) {
       logger.error("Failed to initialize RTC Engine", error)
@@ -146,28 +145,33 @@ export class RTCClient {
    * 开始音频采集
    */
   public async startAudioCapture(): Promise<void> {
-    logger.info("[RTCEngineService] Starting audio capture: ", { config: this.config })
+    logger.info("[RTCClient] Starting audio capture: ", { config: this.config })
     try {
       if (!this.engine) {
-        throw new Error("[RTCEngineService] RTC Engine not initialized")
+        throw new Error("[RTCClient] RTC Engine not initialized")
       }
 
       if (this.audioStatus.isMicrophoneOn) {
-        logger.warn("[RTCEngineService] Microphone is already on")
-      } else {
- z       await this.engine.startAudioCapture()
+        logger.warn("[RTCClient] Microphone is already on")
       }
+
+      this.engine.startAudioCapture().then(() => {
+        logger.info("[RTCClient] Started audio capture")
+      }).catch((error) => {
+        logger.error("[RTCClient] Failed to start audio capture", error)
+
+      })
 
       // 如果设置不自动发布，则需要手动发布
       if (this.config && this.config.isAutoPublish) {
-        logger.info("[RTCEngineService] Auto publishing audio stream")
+        logger.info("[RTCClient] Auto publishing audio stream")
         await this.engine.publishStream(MediaType.AUDIO)
       }
 
       this.audioStatus.isMicrophoneOn = true
-      logger.info("[RTCEngineService] Started audio capture")
+      logger.info("[RTCClient] DONE Started audio capture")
     } catch (error) {
-      logger.error("[RTCEngineService] Failed to start audio capture", error)
+      logger.error("[RTCClient] Failed to start audio capture", error)
       throw error
     }
   }
@@ -242,24 +246,6 @@ export class RTCClient {
   }
 
   /**
-   * 释放资源
-   */
-  public destroy(): void {
-    if (this.engine) {
-      this.removeEventListeners()
-      this.engine = null
-      this.config = null
-      this.audioStatus = {
-        isConnected: false,
-        isMicrophoneOn: false,
-        isSpeakerOn: false,
-        isProcessing: false,
-      }
-      logger.info("RTC Engine destroyed")
-    }
-  }
-
-  /**
    * 添加事件监听
    */
   public on(event: string, callback: (...args: any[]) => void): void {
@@ -282,6 +268,8 @@ export class RTCClient {
    * 注册外部事件监听器（用于 useVoiceChat hook）
    */
   public registerEventListeners(listeners: Record<string, (...args: any[]) => void>): void {
+    logger.info("Registering event listeners", listeners)
+    
     if (!this.engine) {
       logger.warn("RTC Engine not initialized, cannot register listeners")
       return
@@ -352,7 +340,7 @@ export class RTCClient {
       this.engine.on(VERTC.events.onRoomBinaryMessageReceived, listeners.handleRoomBinaryMessageReceived)
     }
 
-    logger.info("[RTCEngineService] External event listeners registered")
+    logger.info("[RTCClient] External event listeners registered")
   }
 
   /**
@@ -394,90 +382,6 @@ export class RTCClient {
       logger.error("Failed to switch audio device", error)
       throw error
     }
-  }
-
-  /**
-   * 设置事件监听器
-   */
-  private setupEventListeners(): void {
-    if (!this.engine) return
-
-    // 监听远端用户发布流
-    this.engine.on(VERTC.events.onUserPublishStream, (e: { userId: string; mediaType: MediaType }) => {
-      logger.info(`User ${e.userId} published stream with mediaType ${e.mediaType}`)
-
-      if (this.eventCallbacks[VERTC.events.onUserPublishStream]) {
-        this.eventCallbacks[VERTC.events.onUserPublishStream]?.forEach((callback) => callback(e))
-      }
-    })
-
-    // 监听远端用户取消发布流
-    this.engine.on(VERTC.events.onUserUnpublishStream, (e: { userId: string; mediaType: MediaType }) => {
-      logger.info(`User ${e.userId} unpublished stream with mediaType ${e.mediaType}`)
-
-      if (this.eventCallbacks[VERTC.events.onUserUnpublishStream]) {
-        this.eventCallbacks[VERTC.events.onUserUnpublishStream]?.forEach((callback) => callback(e))
-      }
-    })
-
-    // 监听用户加入房间
-    this.engine.on(VERTC.events.onUserJoined, (event: any) => {
-      const userId = typeof event === "object" && event.userInfo?.userId ? event.userInfo.userId : "unknown"
-      logger.info(`User ${userId} joined the room`)
-
-      if (this.eventCallbacks[VERTC.events.onUserJoined]) {
-        this.eventCallbacks[VERTC.events.onUserJoined]?.forEach((callback) => callback(event))
-      }
-    })
-
-    // 监听用户离开房间
-    this.engine.on(VERTC.events.onUserLeave, (event: any) => {
-      const userId = typeof event === "object" && event.userId ? event.userId : "unknown"
-      logger.info(`User ${userId} left the room`)
-
-      if (this.eventCallbacks[VERTC.events.onUserLeave]) {
-        this.eventCallbacks[VERTC.events.onUserLeave]?.forEach((callback) => callback(event))
-      }
-    })
-
-    // 监听连接状态变化
-    this.engine.on(VERTC.events.onConnectionStateChanged, (e: { state: number }) => {
-      logger.info(`Connection state changed to ${e.state}`)
-
-      if (this.eventCallbacks[VERTC.events.onConnectionStateChanged]) {
-        this.eventCallbacks[VERTC.events.onConnectionStateChanged]?.forEach((callback) => callback(e))
-      }
-    })
-
-    // 监听错误
-    this.engine.on(VERTC.events.onError, (event: any) => {
-      // 兼容SDK不同版本的错误结构
-      const errorCode = event?.errorCode || event?.code || "unknown"
-      const message = event?.message || ""
-      const forbiddenTime = event?.forbiddenTime || 0
-
-      logger.error(
-        `RTC Engine error: ${errorCode} - ${message} ${forbiddenTime ? `(Forbidden for ${forbiddenTime}s)` : ""}`
-      )
-
-      if (this.eventCallbacks[VERTC.events.onError]) {
-        this.eventCallbacks[VERTC.events.onError]?.forEach((callback) => callback(event))
-      }
-    })
-  }
-
-  /**
-   * 移除事件监听器
-   */
-  private removeEventListeners(): void {
-    if (!this.engine) return
-
-    this.engine.off(VERTC.events.onUserPublishStream)
-    this.engine.off(VERTC.events.onUserUnpublishStream)
-    this.engine.off(VERTC.events.onUserJoined)
-    this.engine.off(VERTC.events.onUserLeave)
-    this.engine.off(VERTC.events.onConnectionStateChanged)
-    this.engine.off(VERTC.events.onError)
   }
 }
 

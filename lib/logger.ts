@@ -1,79 +1,108 @@
 /**
- * 全局日志记录器
- * 封装一致的日志格式，方便排查问题
+ * 日志服务 - 为整个应用提供统一的日志记录功能
  */
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-interface LogOptions {
-  module?: string;
-  data?: unknown;
-  error?: Error;
+interface LoggerOptions {
+  minLevel: LogLevel;
+  enableConsole: boolean;
 }
 
 class Logger {
-  private static instance: Logger;
-  private isDevelopment = process.env.NODE_ENV !== 'production';
+  private options: LoggerOptions;
+  private levelPriority: Record<LogLevel, number> = {
+    debug: 0,
+    info: 1,
+    warn: 2,
+    error: 3,
+  };
 
-  private constructor() {}
+  constructor(options?: Partial<LoggerOptions>) {
+    this.options = {
+      minLevel: options?.minLevel || 'info',
+      enableConsole: options?.enableConsole ?? true
+    };
+  }
 
-  static getInstance(): Logger {
-    if (!Logger.instance) {
-      Logger.instance = new Logger();
+  /**
+   * 设置日志级别
+   */
+  public setLevel(level: LogLevel): void {
+    this.options.minLevel = level;
+  }
+
+  /**
+   * 启用或禁用控制台输出
+   */
+  public setEnableConsole(enable: boolean): void {
+    this.options.enableConsole = enable;
+  }
+
+  /**
+   * 记录调试级别日志
+   */
+  public debug(message: string, ...args: any[]): void {
+    this.log('debug', message, ...args);
+  }
+
+  /**
+   * 记录信息级别日志
+   */
+  public info(message: string, ...args: any[]): void {
+    this.log('info', message, ...args);
+  }
+
+  /**
+   * 记录警告级别日志
+   */
+  public warn(message: string, ...args: any[]): void {
+    this.log('warn', message, ...args);
+  }
+
+  /**
+   * 记录错误级别日志
+   */
+  public error(message: string, ...args: any[]): void {
+    this.log('error', message, ...args);
+  }
+
+  /**
+   * 内部日志记录方法
+   */
+  private log(level: LogLevel, message: string, ...args: any[]): void {
+    // 检查日志级别是否应该被记录
+    if (this.levelPriority[level] < this.levelPriority[this.options.minLevel]) {
+      return;
     }
-    return Logger.instance;
-  }
 
-  private formatMessage(level: LogLevel, message: string, options?: LogOptions): string {
     const timestamp = new Date().toISOString();
-    const module = options?.module ? `[${options.module}]` : '';
-    return `[${timestamp}][${level.toUpperCase()}]${module} ${message}`;
-  }
+    const formattedMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
 
-  private log(level: LogLevel, message: string, options?: LogOptions): void {
-    const formattedMessage = this.formatMessage(level, message, options);
-    
-    // 在开发环境打印日志到控制台
-    if (this.isDevelopment || level !== 'debug') {
+    // 控制台输出
+    if (this.options.enableConsole) {
       switch (level) {
         case 'debug':
-          console.debug(formattedMessage, options?.data || '');
+          console.debug(formattedMessage, ...args);
           break;
         case 'info':
-          console.info(formattedMessage, options?.data || '');
+          console.info(formattedMessage, ...args);
           break;
         case 'warn':
-          console.warn(formattedMessage, options?.data || '');
+          console.warn(formattedMessage, ...args);
           break;
         case 'error':
-          console.error(
-            formattedMessage,
-            options?.error ? options.error : options?.data || ''
-          );
+          console.error(formattedMessage, ...args);
           break;
       }
     }
 
-    // 在生产环境可以集成第三方日志服务
-    // TODO: 集成生产环境日志服务
-  }
-
-  debug(message: string, options?: LogOptions): void {
-    this.log('debug', message, options);
-  }
-
-  info(message: string, options?: LogOptions): void {
-    this.log('info', message, options);
-  }
-
-  warn(message: string, options?: LogOptions): void {
-    this.log('warn', message, options);
-  }
-
-  error(message: string, options?: LogOptions): void {
-    this.log('error', message, options);
+    // 这里可以扩展其他日志输出方式，如文件、远程服务等
   }
 }
 
-// 导出单例
-export const logger = Logger.getInstance();
+// 导出单例实例
+export const logger = new Logger({
+  minLevel: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  enableConsole: true,
+});

@@ -230,7 +230,6 @@ export const useVoiceChat = (): {
   // 房间二进制消息接收（字幕消息）
   const handleRoomBinaryMessageReceived = useCallback(
     (event: { userId: string; message: ArrayBuffer }) => {
-      console.log("📡 [DEBUG] 收到二进制消息:", event.userId, event.message.byteLength, "bytes")
       logger.info("收到房间二进制消息:", { userId: event.userId, size: event.message.byteLength })
 
       try {
