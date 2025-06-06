@@ -110,12 +110,6 @@ export const useVoiceChat = (): {
     const { userId, mediaType } = e;
     logger.info(`用户开始发布流: ${userId}, 媒体类型: ${mediaType}`);
     
-    if (mediaType === MediaType.AUDIO) {
-      // 如果是 AI 用户发布音频流，表示 AI 开始说话
-      if (userId.includes('ai')) {
-        useVoiceChatStore.setState({ callState: CallState.SPEAKING });
-      }
-    }
   }, []);
 
   // 音频流取消发布处理
@@ -127,9 +121,6 @@ export const useVoiceChat = (): {
     const { userId, mediaType, reason } = e;
     logger.info(`用户停止发布流: ${userId}, 媒体类型: ${mediaType}, 原因: ${reason}`);
     
-    if (mediaType === MediaType.AUDIO && userId.includes('ai')) {
-      useVoiceChatStore.setState({ callState: CallState.LISTENING });
-    }
   }, []);
 
   // 本地音频属性报告

@@ -293,7 +293,7 @@ export class RTCEngineService {
     
     // 监听用户加入房间
     this.engine.on(VERTC.events.onUserJoined, (event: any) => {
-      const userId = typeof event === 'object' && event.userId ? event.userId : 'unknown';
+      const userId = typeof event === 'object' && event.userInfo?.userId ? event.userInfo.userId : 'unknown';
       logger.info(`User ${userId} joined the room`);
       
       if (this.eventCallbacks[VERTC.events.onUserJoined]) {
