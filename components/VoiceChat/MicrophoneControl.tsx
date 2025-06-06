@@ -24,9 +24,6 @@ interface MicrophoneControlProps {
 
 export function MicrophoneControl({ className, onError }: MicrophoneControlProps) {
   const [isDeviceMenuOpen, setIsDeviceMenuOpen] = useState(false);
-  const [isSwitching, setIsSwitching] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [hasAutoStarted, setHasAutoStarted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -41,6 +38,7 @@ export function MicrophoneControl({ className, onError }: MicrophoneControlProps
     volumePercentage,
     isRecording,
     isMonitoring,
+    isSwitching,
     checkPermission,
     getDevices,
     startRecording,
@@ -49,61 +47,27 @@ export function MicrophoneControl({ className, onError }: MicrophoneControlProps
     switchDevice,
     startVolumeMonitoringOnly,
     stopVolumeMonitoringOnly,
+    handleDeviceSwitch,
+    handleRequestPermission,
+    startMonitoring,
+    stopMonitoring,
+    autoStartMonitoring,
   } = useMicrophone();
 
-  // 处理设备切换
-  const handleDeviceSwitch = async (deviceId: string) => {
-    if (isSwitching) return; // 防止重复点击
-    
-    setIsSwitching(true);
-    try {
-      const targetDevice = devices.find(d => d.deviceId === deviceId);
-      console.log('Attempting to switch device:', { deviceId, targetDevice });
-      
-      await switchDevice(deviceId);
-      setIsDeviceMenuOpen(false);
-      
-      // 成功反馈
-      toast.success(`已切换到: ${targetDevice?.label || 'Unknown Device'}`);
-      console.log(`Successfully switched to device: ${targetDevice?.label}`);
-      
-    } catch (error) {
-      console.error('Failed to switch device:', error);
-      toast.error(`设备切换失败: ${error instanceof Error ? error.message : '未知错误'}`);
-      onError?.(error as Error);
-    } finally {
-      setIsSwitching(false);
-    }
-  };
-
-  // 处理权限请求
-  const handleRequestPermission = async () => {
-    await checkPermission();
-    await getDevices();
-  };
-
-  // 启动音频监测（仅监测，不录音）
-  const startMonitoring = useCallback(async () => {
-    try {
-      if (!isPermissionGranted) {
-        await checkPermission();
+  // 处理设备切换（简化版）
+  const handleDeviceSwitchWithUI = async (deviceId: string) => {
+    await handleDeviceSwitch(
+      deviceId,
+      (device) => {
+        setIsDeviceMenuOpen(false);
+        toast.success(`已切换到: ${device.label}`);
+      },
+      (error) => {
+        toast.error(`设备切换失败: ${error.message}`);
+        onError?.(error);
       }
-      const stream = await startVolumeMonitoringOnly();
-      if (stream) {
-        // 只是通知流已获取，不触发语音对话录制
-        console.log('音量监测已启动，音频流获取成功');
-      }
-    } catch (error) {
-      console.error('Failed to start monitoring:', error);
-      onError?.(error as Error);
-    }
-  }, [isPermissionGranted, checkPermission, startVolumeMonitoringOnly, onError]);
-
-  // 停止音频监测
-  const stopMonitoring = useCallback(() => {
-    stopVolumeMonitoringOnly();
-    console.log('音量监测已停止');
-  }, [stopVolumeMonitoringOnly]);
+    );
+  };
 
   // 点击外部关闭菜单
   useEffect(() => {
@@ -118,28 +82,6 @@ export function MicrophoneControl({ className, onError }: MicrophoneControlProps
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [isDeviceMenuOpen]);
-
-  // 组件挂载时自动启动音频监测（简化版）
-  useEffect(() => {
-    // 延迟检查，避免初始化冲突
-    const timer = setTimeout(() => {
-      if (!hasAutoStarted && isSupported && isPermissionGranted && !isMonitoring && !isActive) {
-        setHasAutoStarted(true);
-        startMonitoring();
-      }
-    }, 500);
-    
-    return () => clearTimeout(timer);
-  }, []); // 空依赖，只在组件挂载时执行一次
-
-  // 组件卸载时停止监测
-  useEffect(() => {
-    return () => {
-      if (isMonitoring) {
-        stopVolumeMonitoringOnly();
-      }
-    };
-  }, []); // 移除依赖，只在组件卸载时执行
 
   // 音量指示器
   const VolumeIndicator: React.FC = () => (
@@ -197,7 +139,7 @@ export function MicrophoneControl({ className, onError }: MicrophoneControlProps
             {devices.map((device) => (
               <button
                 key={device.deviceId}
-                onClick={() => handleDeviceSwitch(device.deviceId)}
+                onClick={() => handleDeviceSwitchWithUI(device.deviceId)}
                 disabled={isSwitching}
                 className={cn(
                   "w-full text-left px-3 py-2 text-sm rounded-md transition-colors flex items-center justify-between",
@@ -282,7 +224,7 @@ export function MicrophoneControl({ className, onError }: MicrophoneControlProps
               </button>
             ) : (
               <button
-                onClick={checkPermission}
+                onClick={handleRequestPermission}
                 className="px-3 py-1 text-xs bg-blue-100 text-blue-600 hover:bg-blue-200 rounded-full transition-colors"
               >
                 获取权限

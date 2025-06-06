@@ -28,20 +28,34 @@ export interface MicrophoneState {
   selectedDevice: AudioDevice | null;
   volumeLevel: VolumeLevel;
   error: Error | null;
+  hasDevices: boolean;
+  volumePercentage: number;
+  isRecording: boolean;
+  isSwitching: boolean;
+  hasAutoStarted: boolean;
+  isInitializing: boolean; // 新增状态字段
 }
 
 // 麦克风 Hook
 export const useMicrophone = () => {
   const [state, setState] = useState<MicrophoneState>({
-    isSupported: typeof navigator !== 'undefined' && !!navigator.mediaDevices,
+    isSupported: typeof navigator !== 'undefined' && 
+                  navigator.mediaDevices && 
+                  typeof navigator.mediaDevices.getUserMedia === 'function',
     isPermissionGranted: false,
     isActive: false,
     isMuted: false,
-    isMonitoring: false,
     devices: [],
     selectedDevice: null,
-    volumeLevel: { current: 0, peak: 0, rms: 0 },
     error: null,
+    hasDevices: false,
+    volumePercentage: 0,
+    isRecording: false,
+    isMonitoring: false,
+    isSwitching: false,
+    hasAutoStarted: false,
+    isInitializing: false, // 初始化新状态字段
+    volumeLevel: { current: 0, peak: 0, rms: 0 },
   });
 
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -91,7 +105,7 @@ export const useMicrophone = () => {
           kind: device.kind as 'audioinput',
         }));
 
-      setState(prev => ({ ...prev, devices: audioDevices }));
+      setState(prev => ({ ...prev, devices: audioDevices, hasDevices: audioDevices.length > 0 }));
       logger.info(`Found ${audioDevices.length} audio input devices: `, audioDevices);
       return audioDevices;
     } catch (error) {
@@ -161,6 +175,7 @@ export const useMicrophone = () => {
           peak: normalizedPeak,
           rms: normalizedRms,
         },
+        volumePercentage: Math.round(normalizedRms * 100),
       }));
     } catch (error) {
       logger.error('Failed to analyze volume', error);
@@ -191,6 +206,7 @@ export const useMicrophone = () => {
     setState(prev => ({
       ...prev,
       volumeLevel: { current: 0, peak: 0, rms: 0 },
+      volumePercentage: 0,
     }));
   }, []);
 
@@ -435,6 +451,66 @@ export const useMicrophone = () => {
     }
   }, [stopRecording, startRecording, state, getDevices]);
 
+  // 封装的设备切换处理（包含 UI 反馈）
+  const handleDeviceSwitch = useCallback(async (deviceId: string, onSuccess?: (device: AudioDevice) => void, onError?: (error: Error) => void) => {
+    if (state.isSwitching) return; // 防止重复点击
+    
+    setState(prev => ({ ...prev, isSwitching: true }));
+    
+    try {
+      const targetDevice = state.devices.find(d => d.deviceId === deviceId);
+      logger.info('Attempting to switch device:', { deviceId, targetDevice });
+      
+      await switchDevice(deviceId);
+      
+      // 成功反馈
+      logger.info(`Successfully switched to device: ${targetDevice?.label}`);
+      onSuccess?.(targetDevice!);
+      
+    } catch (error) {
+      logger.error('Failed to switch device:', error);
+      onError?.(error as Error);
+    } finally {
+      setState(prev => ({ ...prev, isSwitching: false }));
+    }
+  }, [switchDevice, state.devices, state.isSwitching]);
+
+  // 封装的权限请求处理
+  const handleRequestPermission = useCallback(async () => {
+    await checkPermission();
+    await getDevices();
+  }, [checkPermission, getDevices]);
+
+  // 启动音频监测（仅监测，不录音）
+  const startMonitoring = useCallback(async (onError?: (error: Error) => void) => {
+    try {
+      if (!state.isPermissionGranted) {
+        await checkPermission();
+      }
+      const stream = await startVolumeMonitoringOnly();
+      if (stream) {
+        logger.info('音量监测已启动，音频流获取成功');
+      }
+    } catch (error) {
+      logger.error('Failed to start monitoring:', error);
+      onError?.(error as Error);
+    }
+  }, [state.isPermissionGranted, checkPermission, startVolumeMonitoringOnly]);
+
+  // 停止音频监测
+  const stopMonitoring = useCallback(() => {
+    stopVolumeMonitoringOnly();
+    logger.info('音量监测已停止');
+  }, [stopVolumeMonitoringOnly]);
+
+  // 自动启动监控逻辑
+  const autoStartMonitoring = useCallback(() => {
+    if (!state.hasAutoStarted && state.isSupported && state.isPermissionGranted && !state.isMonitoring && !state.isActive) {
+      setState(prev => ({ ...prev, hasAutoStarted: true }));
+      startMonitoring();
+    }
+  }, [state.hasAutoStarted, state.isSupported, state.isPermissionGranted, state.isMonitoring, state.isActive, startMonitoring]);
+
   // 初始化
   useEffect(() => {
     const initialize = async () => {
@@ -482,9 +558,12 @@ export const useMicrophone = () => {
     switchDevice,
     startVolumeMonitoringOnly,
     stopVolumeMonitoringOnly,
+    handleDeviceSwitch,
+    handleRequestPermission,
+    startMonitoring,
+    stopMonitoring,
+    autoStartMonitoring,
     // 便捷属性
-    hasDevices: state.devices.length > 0,
-    volumePercentage: Math.round(state.volumeLevel.current * 100),
     isRecording: state.isActive && !state.isMuted,
   };
 };
