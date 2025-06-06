@@ -1,5 +1,6 @@
 "use client"
 
+import { useMicrophone } from "@/hooks/useMicrophone"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
@@ -14,6 +15,7 @@ import { MicrophoneControl } from "./MicrophoneControl"
 import { PersonaSelector } from "./PersonaSelector"
 import { VolumeVisualizer } from "./VolumeVisualizer"
 import { WaveAnimation } from "./WaveAnimation"
+import { rtcClient } from "@/lib/rtc-client"
 
 export function VoiceChat() {
   // 本地状态管理
@@ -38,6 +40,8 @@ export function VoiceChat() {
     disconnectCall,
     setSelectedPersona,
   } = useVoiceChatStore()
+
+  const {getCurrentDevice} = useMicrophone()
 
   // 每秒更新通话时间
   useEffect(() => {
@@ -106,7 +110,8 @@ export function VoiceChat() {
   // 处理开始通话
   const handleCallStart = async () => {
     try {
-      await connectCall()
+      const currentDevice = await getCurrentDevice()
+      await connectCall(currentDevice?.deviceId)
       logger.info("通话开始成功")
     } catch (error) {
       logger.error("Failed to start call", error)

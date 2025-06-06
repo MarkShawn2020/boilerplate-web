@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { logger } from '../lib/logger';
+import VERTC from '@volcengine/rtc';
 
 // 音频设备接口
 export interface AudioDevice {
@@ -105,15 +106,22 @@ export const useMicrophone = () => {
           kind: device.kind as 'audioinput',
         }));
 
-      setState(prev => ({ ...prev, devices: audioDevices, hasDevices: audioDevices.length > 0 }));
-      logger.info(`Found ${audioDevices.length} audio input devices: `, audioDevices);
+
+      // rtc
+      const inputs = await VERTC.enumerateAudioCaptureDevices();
+      const outputs = await VERTC.enumerateAudioPlaybackDevices();
+      const audioInputs = inputs.filter((i) => i.deviceId && i.kind === 'audioinput');
+      const audioOutputs = outputs.filter((i) => i.deviceId && i.kind === 'audiooutput');
+      const audioCaptureDevice = audioInputs.filter((i) => i.deviceId)?.[0]?.deviceId;
+
+      logger.info(`Found ${audioDevices.length} audio input devices: `, {audioDevices, audioInputs, audioOutputs, audioCaptureDevice});
       return audioDevices;
     } catch (error) {
       logger.error('Failed to get audio devices', error);
       setState(prev => ({ ...prev, error: error as Error }));
       return [];
     }
-  }, [state.isSupported]);
+  }, [state.isSupported, state.selectedDevice]);
 
   // 初始化音频分析器
   const initializeAudioAnalyzer = useCallback((stream: MediaStream) => {
@@ -511,6 +519,14 @@ export const useMicrophone = () => {
     }
   }, [state.hasAutoStarted, state.isSupported, state.isPermissionGranted, state.isMonitoring, state.isActive, startMonitoring]);
 
+  // 获取当前麦克风设备
+  const getCurrentDevice = useCallback(async (): Promise<AudioDevice | null> => {
+    const devices = await getDevices()
+    const currentDevice = devices[0] ?? null
+    logger.info('当前麦克风设备:', { currentDevice })
+    return currentDevice
+  }, [getDevices]);
+
   // 初始化
   useEffect(() => {
     const initialize = async () => {
@@ -563,6 +579,7 @@ export const useMicrophone = () => {
     startMonitoring,
     stopMonitoring,
     autoStartMonitoring,
+    getCurrentDevice,
     // 便捷属性
     isRecording: state.isActive && !state.isMuted,
   };

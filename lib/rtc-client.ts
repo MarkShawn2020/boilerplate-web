@@ -67,7 +67,7 @@ export class RTCClient {
   /**
    * 加入房间
    */
-  public async connect(config: RTCConfig, deviceId?: string): Promise<void> {
+  public async connect(config: RTCConfig): Promise<void> {
     logger.info("准备加入房间", {
       config,
     })
@@ -101,25 +101,6 @@ export class RTCClient {
         }
       )
 
-      if (this.audioStatus.isMicrophoneOn) {
-        logger.warn("[RTCClient] Microphone is already on")
-      }
-      
-      logger.info(`[RTCClient] Starting audio capture${deviceId ? ` with device: ${deviceId}` : ''}`)
-
-
-      await this.engine.startAudioCapture(deviceId)
-
-      // 如果设置不自动发布，则需要手动发布
-      if (this.config && this.config.isAutoPublish) {
-        logger.info("[RTCClient] Auto publishing audio stream")
-      }
-
-      await this.engine.publishStream(MediaType.AUDIO)
-
-      this.audioStatus.isMicrophoneOn = true
-      logger.info("[RTCClient] DONE Started audio capture")
-
       this.audioStatus.isConnected = true
       this.audioStatus.isProcessing = false
       logger.info(`Joined room: ${config.roomId}`)
@@ -129,6 +110,30 @@ export class RTCClient {
       logger.error("Failed to join room", error)
       throw error
     }
+  }
+
+  public async publishVoiceStream(deviceId: string) {
+    
+    logger.info(`[RTCClient] Starting audio capture: `, {deviceId})
+
+    if (!this.engine) {
+      throw new Error("RTC Engine not initialized")
+    }
+
+    logger.info(`[RTCClient] Setting audio capture device: `, {deviceId})
+    await this.engine.setAudioCaptureDevice(deviceId)
+    logger.info(`[RTCClient] Starting audio capture: `, {deviceId})
+    await this.engine.startAudioCapture(deviceId)
+
+    // 如果设置不自动发布，则需要手动发布
+    if (this.config && this.config.isAutoPublish) {
+      logger.info("[RTCClient] Auto publishing audio stream")
+    }
+
+    await this.engine.publishStream(MediaType.AUDIO)
+
+    this.audioStatus.isMicrophoneOn = true
+    logger.info("[RTCClient] DONE Started audio capture")
   }
 
   /**

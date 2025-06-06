@@ -86,7 +86,6 @@ export interface VoiceChatState {
   audioLevel: number
   isMuted: boolean
   isRecording: boolean
-  selectedDeviceId: string | null
 
   // 消息和字幕
   messages: ChatMessage[]
@@ -119,9 +118,8 @@ export interface VoiceChatState {
 
   // === 业务方法 ===
   setSelectedPersona: (persona: Persona) => void
-  connectCall: () => Promise<void>
+  connectCall: (deviceId?: string) => Promise<void>
   disconnectCall: () => Promise<void>
-  switchDevice: (deviceId: string) => Promise<void>
   processSubtitleMessage: (message: Uint8Array) => void
   addChatMessage: (message: Omit<ChatMessage, "id" | "timestamp">) => void
   updateRealtimeSubtitle: (userId: string, subtitle: RealtimeSubtitle) => void
@@ -156,7 +154,6 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   audioLevel: 0,
   isMuted: false,
   isRecording: false,
-  selectedDeviceId: null,
 
   messages: [],
   realtimeSubtitles: new Map(),
@@ -330,7 +327,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   },
 
   // 连接通话
-  connectCall: async () => {
+  connectCall: async (deviceId?: string) => {
     try {
       const { rtcToken, rtcRoomId, userId, selectedPersona, rtcAppId, startAgent } = get()
 
@@ -373,7 +370,13 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
         isAutoPublish: true,
         isAutoSubscribeAudio: true,
         isAutoSubscribeVideo: false,
-      }, get().selectedDeviceId || undefined)
+      })
+
+      if (!deviceId) {
+      logger.warn("No device selected")
+      } else {
+        await rtcClient.publishVoiceStream(deviceId)
+      }
 
       set({ callState: CallState.CONNECTED })
 
@@ -410,25 +413,6 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
         callState: CallState.ERROR,
         error: error as Error,
       })
-    }
-  },
-
-  // 切换设备
-  switchDevice: async (deviceId: string) => {
-    try {
-      // 存储选中的设备ID
-      set({ selectedDeviceId: deviceId })
-      
-      logger.info(`设置音频输入设备: ${deviceId}`)
-      toast.info(`已设置音频输入设备，将在下次连接时生效`)
-      
-      // 如果当前正在通话中，提示需要重新连接才能切换设备
-      if (get().callState === CallState.CONNECTED) {
-        toast.info(`当前已连接，请断开并重新连接以切换设备`)
-      }
-    } catch (error) {
-      logger.error('设置设备失败', error)
-      set({ error: error as Error })
     }
   },
 
