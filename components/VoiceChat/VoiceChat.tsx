@@ -13,7 +13,6 @@ import { WaveAnimation } from "./WaveAnimation"
 
 // Hook 导入
 import { useMicrophone } from "../../hooks/useMicrophone"
-import { useVoiceChat } from "../../hooks/useVoiceChat"
 
 // 服务和状态管理导入
 import { logger } from "../../lib/logger"
@@ -27,43 +26,35 @@ export function VoiceChat() {
 
   // 从 Zustand store 获取状态
   const {
+    // 基础状态
     callState,
-    isMuted,
+    audioStatus,
     selectedPersona,
     personas,
     error,
-    connectCall,
-    disconnectCall,
-    toggleMute,
-    setSelectedPersona,
+    // 业务数据  
     messages,
     realtimeSubtitles,
     taskId,
     isAgentActive,
+    // 初始化方法
     initializeServices,
-    listeners,
+    isServicesInitialized,
+    initializeRTCListeners,
+    cleanupRTCListeners,
+    // 音频相关
     audioLevel,
-    isConnected,
+    isRecording,
+    isMuted,
+    // 控制方法
     startRecording,
     stopRecording,
     switchDevice,
+    connectCall,
+    disconnectCall,
+    toggleMute,
+    setSelectedPersona,
   } = useVoiceChatStore()
-
-  // 使用 useVoiceChat hook
-  const {
-    listeners,
-    audioLevel,
-    isConnected,
-    startRecording,
-    stopRecording,
-    switchDevice,
-  } = useVoiceChat();
-
-  // 麦克风 Hook
-  const {
-    volumeLevel,
-    isRecording: micIsRecording,
-  } = useMicrophone();
 
   // 每秒更新通话时间
   useEffect(() => {
@@ -115,6 +106,23 @@ export function VoiceChat() {
       // 组件卸载时的清理逻辑
     }
   }, []) // 依赖数组为空，只在挂载时运行一次
+
+  // 初始化 RTC 事件监听器
+  useEffect(() => {
+    if (!isServicesInitialized) {
+      logger.debug("服务未初始化，等待初始化完成");
+      return;
+    }
+
+    logger.info("初始化 RTC 事件监听器");
+    initializeRTCListeners();
+
+    // 清理函数：组件卸载时清理事件监听器
+    return () => {
+      logger.info("清理 RTC 事件监听器");
+      cleanupRTCListeners();
+    };
+  }, [isServicesInitialized, initializeRTCListeners, cleanupRTCListeners]);
 
   // 页面刷新前清理语音连接
   useEffect(() => {
@@ -186,7 +194,7 @@ export function VoiceChat() {
       {/* 右上角控制面板 */}
       <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg shadow-sm">
         {/* 智能体状态 */}
-        {isConnected && (
+        {isAgentActive && (
           <div className="p-2 border-b border-gray-200 flex items-center gap-2 items-center">
             <div className="flex items-center space-x-2">
               <div className={`w-2 h-2 rounded-full ${isAgentActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
@@ -205,7 +213,7 @@ export function VoiceChat() {
 
 
         {/* 麦克风设置控制 */}
-        {isConnected && (
+        {isAgentActive && (
           <div className="p-2 border-t border-gray-200">
             <button
               onClick={() => setShowMicSettings(!showMicSettings)}
@@ -264,7 +272,7 @@ export function VoiceChat() {
         )}
 
         {/* 语音波形动画 */}
-        {isConnected && (
+        {isAgentActive && (
           <div className="space-y-4">
             <WaveAnimation isActive={callState === CallState.SPEAKING} />
             <VolumeVisualizer level={audioLevel} />
