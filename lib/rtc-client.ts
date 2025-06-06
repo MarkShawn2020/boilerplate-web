@@ -67,7 +67,7 @@ export class RTCClient {
   /**
    * 加入房间
    */
-  public async connect(config: RTCConfig): Promise<void> {
+  public async connect(config: RTCConfig, deviceId?: string): Promise<void> {
     logger.info("准备加入房间", {
       config,
     })
@@ -104,8 +104,11 @@ export class RTCClient {
       if (this.audioStatus.isMicrophoneOn) {
         logger.warn("[RTCClient] Microphone is already on")
       }
+      
+      logger.info(`[RTCClient] Starting audio capture${deviceId ? ` with device: ${deviceId}` : ''}`)
 
-      await this.engine.startAudioCapture()
+
+      await this.engine.startAudioCapture(deviceId)
 
       // 如果设置不自动发布，则需要手动发布
       if (this.config && this.config.isAutoPublish) {

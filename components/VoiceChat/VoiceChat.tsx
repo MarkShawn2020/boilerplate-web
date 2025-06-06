@@ -24,19 +24,15 @@ export function VoiceChat() {
   const {
     // 基础状态
     callState,
-    audioStatus,
     selectedPersona,
     personas,
     error, // 业务数据
     messages,
     realtimeSubtitles,
-    taskId,
     isAgentActive, // 初始化方法
     initializeServices,
 
     // 音频相关
-    audioLevel,
-    isRecording,
     isMuted,
     connectCall,
     disconnectCall,

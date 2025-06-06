@@ -86,6 +86,7 @@ export interface VoiceChatState {
   audioLevel: number
   isMuted: boolean
   isRecording: boolean
+  selectedDeviceId: string | null
 
   // 消息和字幕
   messages: ChatMessage[]
@@ -155,6 +156,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
   audioLevel: 0,
   isMuted: false,
   isRecording: false,
+  selectedDeviceId: null,
 
   messages: [],
   realtimeSubtitles: new Map(),
@@ -362,7 +364,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
       rtcClient.registerEventListeners(listeners)
       logger.info("RTC 事件监听器已注册")
 
-      // 加入 RTC 房间
+      // 加入 RTC 房间，传入当前选择的麦克风设备ID
       await rtcClient.connect({
         appId: rtcAppId,
         roomId: rtcRoomId,
@@ -371,7 +373,7 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
         isAutoPublish: true,
         isAutoSubscribeAudio: true,
         isAutoSubscribeVideo: false,
-      })
+      }, get().selectedDeviceId || undefined)
 
       set({ callState: CallState.CONNECTED })
 
@@ -413,15 +415,21 @@ export const useVoiceChatStore = create<VoiceChatState>((set, get) => ({
 
   // 切换设备
   switchDevice: async (deviceId: string) => {
-    // try {
-    //   // 使用 rtcClient 的设备切换方法
-    //   await rtcClient.switchAudioDevice(deviceId);
-    //
-    //   logger.info(`切换音频输入设备到: ${deviceId}`);
-    // } catch (error) {
-    //   logger.error('切换设备失败', error);
-    //   set({ error: error as Error });
-    // }
+    try {
+      // 存储选中的设备ID
+      set({ selectedDeviceId: deviceId })
+      
+      logger.info(`设置音频输入设备: ${deviceId}`)
+      toast.info(`已设置音频输入设备，将在下次连接时生效`)
+      
+      // 如果当前正在通话中，提示需要重新连接才能切换设备
+      if (get().callState === CallState.CONNECTED) {
+        toast.info(`当前已连接，请断开并重新连接以切换设备`)
+      }
+    } catch (error) {
+      logger.error('设置设备失败', error)
+      set({ error: error as Error })
+    }
   },
 
   // 处理字幕消息
